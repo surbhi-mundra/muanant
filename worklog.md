@@ -100,3 +100,50 @@ Artifacts produced:
 - 15 new Python source files (parsing/model.py, base.py, pdf.py, docx.py, txt.py, markdown.py, csv.py, xlsx.py, registry.py, chunking.py; ingestion/service.py, __init__.py; storage/objects.py; api/routes/documents.py)
 - 5 new test files (74 tests)
 - Updated: sovereign/api/app.py (documents router), pyproject.toml (per-file-ignores)
+
+---
+Task ID: phase-3
+Agent: Principal Engineer (main)
+Task: Phase 3 — OCR + multimodal processing. Build real Tesseract OCR adapter, scanned-PDF detection, OCR pipeline, vision service, wire into ingestion for auto-OCR of scanned PDFs and images, and add API routes.
+
+Work Log:
+- Implemented sovereign/ocr/tesseract.py: TesseractOCR adapter satisfying the OCR protocol from Phase 1. Real OCR via pytesseract + tesseract 5.5.0 binary. Features: PIL Image loading from bytes/path, image preprocessing (grayscale, upscale, contrast, sharpen), simple text-only OCR, layout-mode OCR with blocks/lines/words + bounding boxes, confidence scoring, line grouping from tesseract word-level data, block grouping by vertical gap heuristic.
+- Registered TesseractOCR in sovereign/models/backends/__init__.py as "tesseract.ocr" — eagerly imported because tesseract is CPU-only and always available. Added pytesseract + Pillow to core dependencies in pyproject.toml.
+- Implemented sovereign/ocr/pipeline.py: OCR pipeline for PDFs and standalone images.
+  - detect_scanned_pdf: per-page detection using text char count, image count, and text density. Handles text PDFs (not scanned), fully scanned PDFs, and mixed PDFs (some text + some scanned pages).
+  - render_pdf_page_to_image: renders PDF page to PNG at configurable DPI via PyMuPDF.
+  - ocr_pdf: main pipeline — detect scanned pages, render to image, OCR each, merge results into ParsedDocument. Text pages keep their original text; only scanned pages get OCR'd. Includes provenance metadata (OCR engine, scanned page count).
+  - ocr_image: standalone image OCR — renders to ParsedDocument with single page.
+  - OCROptions dataclass: render_dpi, languages, with_layout, min_confidence.
+- Implemented sovereign/vision/service.py: VisionService using the VisionLLM protocol from ModelGateway. Methods: describe_image (general), describe_diagram (engineering schematics/P&IDs with specialized prompt), describe_inspection_image (industrial inspection photos), extract_text_from_image (vision-based OCR). Uses MockBackend in dev, real vision models in prod.
+- Updated sovereign/ingestion/service.py: ingest_document is now async. Auto-detects scanned PDFs and runs OCR pipeline. Handles image MIME types (PNG/JPEG/WEBP) via ocr_image. Added image magic bytes to _MAGIC_BYTES (PNG, JPEG, WEBP/RIFF). Three code paths: images → ocr_image, PDFs → detect scanned → ocr_pdf or parse_document, other formats → parse_document. Fallback to normal parsing if OCR fails.
+- Implemented sovereign/api/routes/vision_ocr.py: 5 new endpoints:
+  - POST /vision/describe — general image description
+  - POST /vision/diagram — engineering diagram description
+  - POST /vision/inspect — inspection photo description
+  - POST /ocr/image — standalone image OCR
+  - POST /documents/{id}/re-ocr — re-run OCR on existing document
+  Wired into app.py alongside health and documents routers.
+- Wrote 2 new test files (32 new tests):
+  - test_ocr.py: 24 tests across 5 test classes: TestTesseractAdapter (protocol compliance, text extraction, blank image, layout mode, confidence, page size, invalid image), TestScannedDetection (text PDF not scanned, scanned PDF detected, mixed PDF partially detected, char/image counts), TestPageRendering (PNG output, invalid page, DPI scaling), TestOCRPipeline (image→ParsedDocument, text extraction, scanned PDF OCR, text PDF preservation, mixed PDF, metadata, blank image), TestBackendRegistration (tesseract.ocr in registry).
+  - test_vision.py: 5 tests: describe_image, describe_diagram, describe_inspection_image, extract_text_from_image, _normalize_media_type.
+  - Added 3 new API integration tests in test_documents_api.py: image upload via API, vision/describe endpoint, ocr/image endpoint.
+- Updated existing ingestion tests: made all test functions async (ingest_document is now async), added await to all ingest_document calls.
+- Fixed lint: E741 (ambiguous variable `l` → `ln` in OCR helpers), E501 (line length in ingestion/service, vision/service, tests), RUF059 (unused unpacked variables in test), PLC0415 (per-file-ignores for ocr/ and api/routes/), removed unused type:ignore comments.
+- Fixed mypy: fitz/PIL/pytesseract/docx import stubs via mypy override `ignore_missing_imports = true`, OCROptions.languages type as `list[str] | None` with `__post_init__` default, media_type Literal type mismatch via _normalize_media_type + type:ignore[arg-type], implicit Optional in route handlers (replaced GatewayDep=None with get_model_gateway() call), no-any-return for pix.tobytes().
+- Verified end-to-end: uploaded a PNG image containing "INSPECTION ID: 2024-0042" and "STATUS: PASS", Tesseract OCR extracted the text perfectly, parsed document retrievable via API. Vision describe endpoint works with MockBackend.
+
+Stage Summary:
+- Phase 3 COMPLETE. 164/164 tests pass (132 Phase 1+2 + 32 Phase 3). Ruff clean. Mypy clean (48 files).
+- Real Tesseract OCR working: text extraction from images with bounding boxes, confidence scores, and layout analysis.
+- Scanned-PDF detection: text-density-based per-page detection handles text PDFs, fully scanned PDFs, and mixed PDFs.
+- OCR pipeline integrated into ingestion: uploaded images auto-OCR'd, scanned PDFs auto-detected and OCR'd, mixed PDFs selectively OCR'd.
+- Vision service: 4 specialized methods (general, diagram, inspection, text extraction) using the VisionLLM protocol — MockBackend in dev, real vision models in prod.
+- 5 new API endpoints: /vision/describe, /vision/diagram, /vision/inspect, /ocr/image, /documents/{id}/re-ocr.
+- Ready for Phase 4 (Knowledge base: embeddings + vector store + hybrid retrieval) upon user approval.
+
+Artifacts produced:
+- 4 new Python source files: ocr/__init__.py, ocr/tesseract.py, ocr/pipeline.py, vision/__init__.py, vision/service.py, api/routes/vision_ocr.py
+- 2 new test files: tests/unit/test_ocr.py (24 tests), tests/unit/test_vision.py (5 tests)
+- 3 new API integration tests in tests/integration/test_documents_api.py
+- Updated: ingestion/service.py (async + OCR integration), models/backends/__init__.py (tesseract registration), api/app.py (vision_ocr router), pyproject.toml (pytesseract/Pillow deps, mypy overrides, per-file-ignores)

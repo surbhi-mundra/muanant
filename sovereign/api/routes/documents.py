@@ -62,7 +62,7 @@ async def upload_document(
     """
     project_id = _DEV_PROJECT_ID
     data = await file.read()
-    result = ingest_document(
+    result = await ingest_document(
         project_id=project_id,
         filename=file.filename or "upload",
         data=data,

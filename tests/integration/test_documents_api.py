@@ -134,3 +134,70 @@ def test_upload_empty_quarantines(client: TestClient) -> None:
     assert resp.status_code == 200
     body = resp.json()
     assert body["status"] == "quarantined"
+
+
+def test_upload_image_via_api(client: TestClient) -> None:
+    """Upload a PNG image — should be OCR'd and stored."""
+    import io
+
+    from PIL import Image, ImageDraw
+
+    img = Image.new("RGB", (400, 100), color="white")
+    draw = ImageDraw.Draw(img)
+    draw.text((20, 30), "TEST OCR TEXT 12345", fill="black")
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+    image_data = buf.getvalue()
+
+    resp = client.post(
+        "/documents",
+        files={"file": ("test.png", image_data, "image/png")},
+    )
+    assert resp.status_code == 201, resp.text
+    body = resp.json()
+    assert body["status"] == "parsed"
+    assert body["mime_type"] == "image/png"
+    assert body["document_id"]
+
+
+def test_vision_describe_endpoint(client: TestClient) -> None:
+    """POST /vision/describe should return a description."""
+    # Create a minimal PNG
+    import io
+
+    from PIL import Image
+
+    img = Image.new("RGB", (100, 100), color="blue")
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+
+    resp = client.post(
+        "/vision/describe",
+        files={"file": ("test.png", buf.getvalue(), "image/png")},
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["text"]
+    assert "mock-vision" in body["model"]
+
+
+def test_ocr_image_endpoint(client: TestClient) -> None:
+    """POST /ocr/image should run OCR and return text."""
+    import io
+
+    from PIL import Image, ImageDraw
+
+    img = Image.new("RGB", (400, 100), color="white")
+    draw = ImageDraw.Draw(img)
+    draw.text((20, 30), "OCR TEST 67890", fill="black")
+    buf = io.BytesIO()
+    img.save(buf, format="PNG")
+
+    resp = client.post(
+        "/ocr/image",
+        files={"file": ("test.png", buf.getvalue(), "image/png")},
+    )
+    assert resp.status_code == 200, resp.text
+    body = resp.json()
+    assert body["text"]  # should have some text from OCR
+    assert "tesseract" in body["model"]

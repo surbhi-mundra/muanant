@@ -52,6 +52,9 @@ _MAGIC_BYTES: list[tuple[bytes, str]] = [
     (b"%PDF", "application/pdf"),
     (b"\x50\x4b\x03\x04", "application/zip"),  # DOCX/XLSX are ZIP
     (b"\xd0\xcf\x11\xe0", "application/msoffice"),  # OLE2 (old Office)
+    (b"\x89PNG\r\n\x1a\n", "image/png"),
+    (b"\xff\xd8\xff", "image/jpeg"),
+    (b"RIFF", "image/webp"),  # WEBP starts with RIFF....WEBP
 ]
 
 
@@ -70,6 +73,11 @@ def _detect_mime(data: bytes, filename: str, client_mime: str) -> str:
                 if _is_xlsx(data):
                     return "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
                 return mime
+            # WEBP: RIFF....WEBP — verify the WEBP marker
+            if mime == "image/webp":
+                if len(data) >= 12 and data[8:12] == b"WEBP":
+                    return "image/webp"
+                continue  # RIFF but not WEBP — keep checking
             return mime
 
     # 2. Text detection
@@ -228,7 +236,7 @@ class IngestResult:
     quarantine_reason: str | None = None
 
 
-def ingest_document(
+async def ingest_document(
     project_id: str,
     filename: str,
     data: bytes,
@@ -306,26 +314,103 @@ def ingest_document(
     storage_key = new_storage_key()
     store.put(project_id, storage_key, data)
 
-    # 4. Parse
+    # 4. Parse (or OCR for scanned PDFs / images)
     doc_id = new_ulid()
     parse_warnings: list[str] = list(validation.warnings)
+    parsed: ParsedDocument | None = None
 
-    try:
-        parsed = parse_document(data, filename, validation.mime_type)
-        parsed.document_id = doc_id
-        parsed.project_id = project_id
-        parsed.source_sha256 = validation.sha256
-        parse_warnings.extend(parsed.parse_warnings)
-    except Exception as e:
-        log.error(
-            "ingestion.parse.failed",
-            document_id=doc_id,
-            filename=filename,
-            error=str(e),
-        )
-        # Parse failure → store the doc but mark as "stored" not "parsed"
-        parsed = None
-        parse_warnings.append(f"parse failed: {e}")
+    # Handle image MIME types → OCR pipeline
+    if validation.mime_type.startswith("image/"):
+        try:
+            from sovereign.ocr.pipeline import OCROptions, ocr_image
+
+            parsed = await ocr_image(
+                image_data=data,
+                filename=filename,
+                media_type=validation.mime_type,
+                options=OCROptions(),
+            )
+            parsed.document_id = doc_id
+            parsed.project_id = project_id
+            parsed.source_sha256 = validation.sha256
+            parse_warnings.extend(parsed.parse_warnings)
+        except Exception as e:
+            log.error(
+                "ingestion.ocr_image.failed",
+                document_id=doc_id, filename=filename, error=str(e),
+            )
+            parse_warnings.append(f"image OCR failed: {e}")
+    # Handle scanned PDFs → detect + OCR if needed
+    elif validation.mime_type == "application/pdf":
+        try:
+            from sovereign.ocr.pipeline import detect_scanned_pdf
+
+            scan_report = detect_scanned_pdf(data)
+            if scan_report.any_scanned:
+                log.info(
+                    "ingestion.scanned_pdf_detected",
+                    filename=filename,
+                    scanned_pages=len(scan_report.scanned_page_numbers),
+                    total_pages=scan_report.total_pages,
+                )
+                from sovereign.ocr.pipeline import OCROptions, ocr_pdf
+
+                parsed = await ocr_pdf(
+                    pdf_data=data,
+                    filename=filename,
+                    options=OCROptions(),
+                )
+                parsed.document_id = doc_id
+                parsed.project_id = project_id
+                parsed.source_sha256 = validation.sha256
+                parse_warnings.extend(parsed.parse_warnings)
+                parse_warnings.append(
+                    f"OCR applied to {len(scan_report.scanned_page_numbers)} "
+                    f"of {scan_report.total_pages} pages"
+                )
+            else:
+                # Normal PDF with extractable text
+                parsed = parse_document(data, filename, validation.mime_type)
+                parsed.document_id = doc_id
+                parsed.project_id = project_id
+                parsed.source_sha256 = validation.sha256
+                parse_warnings.extend(parsed.parse_warnings)
+        except Exception as e:
+            log.error(
+                "ingestion.pdf_ocr.failed",
+                document_id=doc_id,
+                filename=filename,
+                error=str(e),
+            )
+            # Fallback to normal parsing
+            try:
+                parsed = parse_document(data, filename, validation.mime_type)
+                parsed.document_id = doc_id
+                parsed.project_id = project_id
+                parsed.source_sha256 = validation.sha256
+                parse_warnings.extend(parsed.parse_warnings)
+            except Exception as e2:
+                log.error(
+                    "ingestion.parse.failed",
+                    document_id=doc_id, filename=filename, error=str(e2),
+                )
+                parse_warnings.append(f"parse failed: {e2}")
+    else:
+        # All other formats: standard parsing
+        try:
+            parsed = parse_document(data, filename, validation.mime_type)
+            parsed.document_id = doc_id
+            parsed.project_id = project_id
+            parsed.source_sha256 = validation.sha256
+            parse_warnings.extend(parsed.parse_warnings)
+        except Exception as e:
+            log.error(
+                "ingestion.parse.failed",
+                document_id=doc_id,
+                filename=filename,
+                error=str(e),
+            )
+            parse_warnings.append(f"parse failed: {e}")
 
     # 5. Persist Document row
     version = _get_next_version(project_id, filename)

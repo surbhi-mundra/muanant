@@ -131,8 +131,8 @@ def test_validate_detects_xlsx_magic() -> None:
 # ---------------------------------------------------------------------------
 # Ingestion tests
 # ---------------------------------------------------------------------------
-def test_ingest_txt_document() -> None:
-    result = ingest_document(PROJECT_ID, "test.txt", _make_txt(), "text/plain")
+async def test_ingest_txt_document() -> None:
+    result = await ingest_document(PROJECT_ID, "test.txt", _make_txt(), "text/plain")
     assert result.status == "parsed"
     assert result.document_id
     assert result.mime_type == "text/plain"
@@ -140,8 +140,8 @@ def test_ingest_txt_document() -> None:
     assert not result.is_duplicate
 
 
-def test_ingest_creates_document_row() -> None:
-    result = ingest_document(PROJECT_ID, "test.txt", _make_txt(), "text/plain")
+async def test_ingest_creates_document_row() -> None:
+    result = await ingest_document(PROJECT_ID, "test.txt", _make_txt(), "text/plain")
     doc = get_document(PROJECT_ID, result.document_id)
     assert doc.id == result.document_id
     assert doc.original_filename == "test.txt"
@@ -149,50 +149,56 @@ def test_ingest_creates_document_row() -> None:
     assert doc.sha256 == result.sha256
 
 
-def test_ingest_dedup() -> None:
+async def test_ingest_dedup() -> None:
     """Uploading the same content twice should return the existing doc."""
     data = _make_txt()
-    r1 = ingest_document(PROJECT_ID, "test.txt", data, "text/plain")
-    r2 = ingest_document(PROJECT_ID, "test.txt", data, "text/plain")
+    r1 = await ingest_document(PROJECT_ID, "test.txt", data, "text/plain")
+    r2 = await ingest_document(PROJECT_ID, "test.txt", data, "text/plain")
     assert r1.document_id == r2.document_id
     assert r2.is_duplicate
     assert r2.status == "duplicate"
 
 
-def test_ingest_versioning() -> None:
+async def test_ingest_versioning() -> None:
     """Different content with same filename should increment version."""
-    ingest_document(PROJECT_ID, "report.txt", b"version 1 content", "text/plain")
-    r2 = ingest_document(PROJECT_ID, "report.txt", b"version 2 different content", "text/plain")
+    await ingest_document(PROJECT_ID, "report.txt", b"version 1 content", "text/plain")
+    r2 = await ingest_document(
+        PROJECT_ID, "report.txt", b"version 2 different content", "text/plain"
+    )
     assert r2.version == 2
     assert r2.document_id  # new doc ID
 
 
-def test_ingest_md_document() -> None:
-    result = ingest_document(PROJECT_ID, "test.md", _make_md(), "text/markdown")
+async def test_ingest_md_document() -> None:
+    result = await ingest_document(PROJECT_ID, "test.md", _make_md(), "text/markdown")
     assert result.status == "parsed"
     assert result.mime_type == "text/markdown"
 
 
-def test_ingest_csv_document() -> None:
-    result = ingest_document(PROJECT_ID, "test.csv", _make_csv(), "text/csv")
+async def test_ingest_csv_document() -> None:
+    result = await ingest_document(PROJECT_ID, "test.csv", _make_csv(), "text/csv")
     assert result.status == "parsed"
 
 
-def test_ingest_xlsx_document() -> None:
-    result = ingest_document(PROJECT_ID, "test.xlsx", _make_xlsx(), "application/octet-stream")
+async def test_ingest_xlsx_document() -> None:
+    result = await ingest_document(
+        PROJECT_ID, "test.xlsx", _make_xlsx(), "application/octet-stream"
+    )
     assert result.status == "parsed"
     assert "spreadsheetml" in result.mime_type
 
 
-def test_ingest_docx_document() -> None:
-    result = ingest_document(PROJECT_ID, "test.docx", _make_docx(), "application/octet-stream")
+async def test_ingest_docx_document() -> None:
+    result = await ingest_document(
+        PROJECT_ID, "test.docx", _make_docx(), "application/octet-stream"
+    )
     assert result.status == "parsed"
     assert "wordprocessingml" in result.mime_type
 
 
-def test_ingest_stores_parsed_document() -> None:
+async def test_ingest_stores_parsed_document() -> None:
     """The parsed document JSON should be retrievable after ingest."""
-    result = ingest_document(PROJECT_ID, "test.txt", _make_txt(), "text/plain")
+    result = await ingest_document(PROJECT_ID, "test.txt", _make_txt(), "text/plain")
     parsed = get_parsed_document(PROJECT_ID, result.document_id)
     assert parsed.source_filename == "test.txt"
     assert len(parsed.pages) >= 1
@@ -200,9 +206,9 @@ def test_ingest_stores_parsed_document() -> None:
     assert parsed.metadata.word_count > 0
 
 
-def test_ingest_empty_file_quarantines() -> None:
+async def test_ingest_empty_file_quarantines() -> None:
     """Empty files should be quarantined, not stored."""
-    result = ingest_document(PROJECT_ID, "empty.txt", b"", "text/plain")
+    result = await ingest_document(PROJECT_ID, "empty.txt", b"", "text/plain")
     assert result.status == "quarantined"
     assert result.quarantine_reason
     assert not result.document_id  # no doc created
@@ -211,17 +217,17 @@ def test_ingest_empty_file_quarantines() -> None:
 # ---------------------------------------------------------------------------
 # List / delete
 # ---------------------------------------------------------------------------
-def test_list_documents() -> None:
-    ingest_document(PROJECT_ID, "a.txt", b"content a", "text/plain")
-    ingest_document(PROJECT_ID, "b.txt", b"content b", "text/plain")
+async def test_list_documents() -> None:
+    await ingest_document(PROJECT_ID, "a.txt", b"content a", "text/plain")
+    await ingest_document(PROJECT_ID, "b.txt", b"content b", "text/plain")
     docs = list_documents(PROJECT_ID)
     assert len(docs) == 2
 
 
-def test_list_documents_project_isolation() -> None:
+async def test_list_documents_project_isolation() -> None:
     """Documents from project A should not appear in project B's list."""
-    ingest_document(PROJECT_ID, "a.txt", b"content a", "text/plain")
-    ingest_document("PROJ_OTHER", "b.txt", b"content b", "text/plain")
+    await ingest_document(PROJECT_ID, "a.txt", b"content a", "text/plain")
+    await ingest_document("PROJ_OTHER", "b.txt", b"content b", "text/plain")
     docs_a = list_documents(PROJECT_ID)
     docs_b = list_documents("PROJ_OTHER")
     assert len(docs_a) == 1
@@ -230,9 +236,9 @@ def test_list_documents_project_isolation() -> None:
     assert docs_b[0].original_filename == "b.txt"
 
 
-def test_delete_document() -> None:
+async def test_delete_document() -> None:
     """Deleting should remove from DB and object store."""
-    result = ingest_document(PROJECT_ID, "test.txt", _make_txt(), "text/plain")
+    result = await ingest_document(PROJECT_ID, "test.txt", _make_txt(), "text/plain")
     doc_id = result.document_id
     delete_document(PROJECT_ID, doc_id)
     from sovereign.core.errors import NotFoundError
@@ -241,9 +247,9 @@ def test_delete_document() -> None:
         get_document(PROJECT_ID, doc_id)
 
 
-def test_delete_cross_project_fails() -> None:
+async def test_delete_cross_project_fails() -> None:
     """Deleting a doc from the wrong project should fail."""
-    result = ingest_document(PROJECT_ID, "test.txt", _make_txt(), "text/plain")
+    result = await ingest_document(PROJECT_ID, "test.txt", _make_txt(), "text/plain")
     from sovereign.core.errors import NotFoundError
 
     with pytest.raises(NotFoundError):
@@ -253,11 +259,11 @@ def test_delete_cross_project_fails() -> None:
 # ---------------------------------------------------------------------------
 # Audit trail
 # ---------------------------------------------------------------------------
-def test_ingest_writes_audit_event() -> None:
+async def test_ingest_writes_audit_event() -> None:
     """Each ingest should produce an audit event."""
     from sovereign.audit.log import verify_full_chain
 
-    ingest_document(PROJECT_ID, "test.txt", _make_txt(), "text/plain")
+    await ingest_document(PROJECT_ID, "test.txt", _make_txt(), "text/plain")
     with session_scope() as s:
         from sqlalchemy import text
 

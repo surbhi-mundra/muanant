@@ -28,6 +28,8 @@ dependencies = [
     "passlib[argon2]>=1.7",
     "PyYAML>=6.0",
     "python-multipart>=0.0.9",
+    "pytesseract>=0.3.10",
+    "Pillow>=10.0",
 ]
 
 [project.optional-dependencies]
@@ -112,7 +114,9 @@ ignore = [
 "tests/**" = ["S101", "PLR2004", "S106", "S105", "PLC0415"]  # asserts, magic values, hardcoded creds, lazy imports in fixtures
 "sovereign/cli/**" = ["S603", "S607"]     # subprocess calls in CLI are explicit
 "sovereign/parsing/**" = ["PLR0912", "PLR0915", "PLC0415"]  # parsers are inherently branchy
-"sovereign/ingestion/**" = ["PLR0911", "PLR0915", "PLC0415"]  # lazy imports for optional deps
+"sovereign/ingestion/**" = ["PLR0911", "PLR0912", "PLR0915", "PLC0415"]  # lazy imports for optional deps
+"sovereign/ocr/**" = ["PLC0415"]  # lazy imports for OCR pipeline
+"sovereign/api/routes/**" = ["PLC0415"]  # lazy imports in route handlers
 
 [tool.ruff.format]
 quote-style = "double"
@@ -139,6 +143,10 @@ exclude = [
 module = "tests.*"
 disallow_untyped_defs = false
 disallow_incomplete_defs = false
+
+[[tool.mypy.overrides]]
+module = ["fitz", "PIL.*", "pytesseract", "docx.*"]
+ignore_missing_imports = true
 
 # ---------------------------------------------------------------------------
 # Pytest

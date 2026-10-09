@@ -106,3 +106,16 @@ register_backend("mock.ocr", _mock_ocr)
 #       from sovereign.models.backends import vllm as _vllm
 #   except ImportError:
 #       pass
+
+# Tesseract OCR is CPU-only and the binary is always available, so we
+# register it eagerly. The adapter imports pytesseract + PIL, both of
+# which are in the core dependencies.
+try:
+    from sovereign.ocr.tesseract import TesseractOCR
+
+    def _tesseract_ocr(cfg: dict[str, Any]) -> TesseractOCR:
+        return TesseractOCR(model_name=cfg.get("model_name", "tesseract-5.x"))
+
+    register_backend("tesseract.ocr", _tesseract_ocr)
+except ImportError:
+    pass

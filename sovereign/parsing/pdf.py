@@ -9,7 +9,7 @@ from __future__ import annotations
 from typing import ClassVar
 
 # PyMuPDF import — the installed package is `fitz` (aliased as `pymupdf`)
-import fitz  # type: ignore[import-untyped]
+import fitz
 
 from sovereign.parsing.model import (
     Block,
