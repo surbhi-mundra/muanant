@@ -1,0 +1,80 @@
+# SOVEREIGN — Docker Compose for Tier 2 (single GPU workstation)
+#
+# Services:
+#   - api: SOVEREIGN FastAPI backend
+#   - workbench: Next.js frontend
+#   - db: PostgreSQL
+#   - qdrant: Qdrant vector database
+#
+# Usage:
+#   docker compose -f infra/compose/docker-compose.yml up -d
+#
+# For Tier 1 (dev), see docker-compose.dev.yml
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: sovereign
+      POSTGRES_PASSWORD: sovereign
+      POSTGRES_DB: sovereign
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sovereign"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  qdrant:
+    image: qdrant/qdrant:latest
+    volumes:
+      - qdrant_data:/qdrant/storage
+    ports:
+      - "6333:6333"
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:6333/healthz || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile
+    depends_on:
+      db:
+        condition: service_healthy
+      qdrant:
+        condition: service_healthy
+    environment:
+      SOVEREIGN_ENV: prod
+      DATABASE_URL: postgresql+psycopg://sovereign:sovereign@db:5432/sovereign
+      QDRANT_URL: http://qdrant:6333
+      OBJECT_STORE_FS_ROOT: /var/lib/sovereign/objects
+      EGRESS_ENABLED: "false"
+      SOVEREIGN_JWT_SECRET: ${SOVEREIGN_JWT_SECRET:-change-me-in-prod}
+    volumes:
+      - sovereign_objects:/var/lib/sovereign/objects
+    ports:
+      - "8000:8000"
+    restart: unless-stopped
+
+  workbench:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile.workbench
+    depends_on:
+      - api
+    environment:
+      SOVEREIGN_API_URL: http://api:8000
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  qdrant_data:
+  sovereign_objects:

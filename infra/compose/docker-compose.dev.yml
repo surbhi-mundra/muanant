@@ -1,0 +1,29 @@
+# SOVEREIGN — Dev Docker Compose (Tier 1: developer machine)
+#
+# Uses SQLite + embedded Qdrant (no external services).
+# Only runs the API; the workbench runs via `npm run dev` locally.
+
+services:
+  api:
+    build:
+      context: ../..
+      dockerfile: infra/docker/Dockerfile
+    environment:
+      SOVEREIGN_ENV: dev
+      DATABASE_URL: sqlite:///./sovereign.db
+      QDRANT_URL: ""  # embedded mode
+      OBJECT_STORE_FS_ROOT: ./storage/objects
+      EGRESS_ENABLED: "false"
+      SOVEREIGN_JWT_SECRET: dev-only-not-for-prod
+    ports:
+      - "8000:8000"
+    volumes:
+      - ../../sovereign:/app/sovereign:ro
+      - ../../configs:/app/configs:ro
+      - sovereign_dev_data:/app/data
+    command: >
+      python -m uvicorn sovereign.api.app:app
+      --host 0.0.0.0 --port 8000 --reload
+
+volumes:
+  sovereign_dev_data:

@@ -135,11 +135,12 @@ async def doc_intel_agent(state: AgentState) -> AgentState:
 async def vision_agent(state: AgentState) -> AgentState:
     """Vision agent — image/diagram understanding via VisionLLM.
 
-    If a document_id is provided, describes its first figure.
+    If a document_id is provided:
+    - For images: describes via inspection/diagram prompts
+    - For documents with figures: runs the full vision workflow
+      (diagram extraction + image-grounded claims)
     Otherwise, describes the query as if it were an image prompt.
     """
-    from sovereign.vision.service import VisionService
-
     log.info("agent.vision.start")
     state = _safe_execute("vision", state)
 
@@ -148,20 +149,43 @@ async def vision_agent(state: AgentState) -> AgentState:
         document_id = state.get("document_id", "")
 
         if document_id:
-            from sovereign.ingestion.service import get_document
+            from sovereign.ingestion.service import get_document, get_parsed_document
             from sovereign.storage.objects import get_object_store
+            from sovereign.vision.service import VisionService
+            from sovereign.vision.workflows import run_vision_workflow
 
             project_id = state.get("project_id", "")
             doc = get_document(project_id, document_id)
             store = get_object_store()
-            image_data = store.get(project_id, doc.storage_key)
 
-            service = VisionService()
             if doc.mime_type.startswith("image/"):
+                # Standalone image — use inspection/diagram description
+                image_data = store.get(project_id, doc.storage_key)
+                service = VisionService()
                 result = await service.describe_inspection_image(image_data, doc.mime_type)
+                state["vision_description"] = result.text
             else:
-                result = await service.describe_diagram(image_data, "image/png")
-            state["vision_description"] = result.text
+                # Document with potential figures — run vision workflow
+                parsed = get_parsed_document(project_id, document_id)
+                raw_data = store.get(project_id, doc.storage_key)
+                wf_result = await run_vision_workflow(parsed, raw_data)
+
+                # Build vision description from workflow results
+                parts: list[str] = []
+                if wf_result.summary:
+                    parts.append(wf_result.summary)
+                for desc in wf_result.diagram_descriptions:
+                    parts.append(
+                        f"[Figure {desc.figure_index + 1}] "
+                        f"Type: {desc.diagram_type}. "
+                        f"{desc.description[:200]}"
+                    )
+                if wf_result.image_grounded_claims:
+                    parts.append(
+                        f"{len(wf_result.image_grounded_claims)} "
+                        "image-grounded claims extracted."
+                    )
+                state["vision_description"] = "\n\n".join(parts) if parts else "[no figures found]"
         else:
             # No image — use the query as a prompt with a placeholder
             state["vision_description"] = (
@@ -271,46 +295,44 @@ async def evidence_verify_agent(state: AgentState) -> AgentState:
 async def risk_agent(state: AgentState) -> AgentState:
     """Risk/Decision agent — findings, severity, recommended actions.
 
-    Analyzes the RAG response + evidence for risk-related content.
-    Extracts findings and assigns severity.
+    Uses the formalized RiskAssessor (Phase 9) to extract findings,
+    compute risk scores, and generate recommendations.
     """
+    from sovereign.rag.model import Claim, EvidenceRef
+    from sovereign.risk.model import RiskAssessor
+
     log.info("agent.risk.start")
     state = _safe_execute("risk", state)
 
     try:
         rag_response = state.get("rag_response", {})
         answer = rag_response.get("answer", "")
-        evidence = rag_response.get("evidence", [])
+        evidence_raw = rag_response.get("evidence", [])
+        claims_raw = rag_response.get("claims", [])
+        query = state.get("query", "")
 
-        findings: list[dict[str, Any]] = []
+        # Convert dicts to typed models
+        evidence = [EvidenceRef(**ev) for ev in evidence_raw if isinstance(ev, dict)]
+        claims = [Claim(**c) for c in claims_raw if isinstance(c, dict)]
 
-        # Simple heuristic: look for risk-related keywords in the answer
-        risk_keywords = ["risk", "hazard", "danger", "warning", "critical",
-                        "failure", "leak", "corrosion", "wear", "damage"]
+        # Run the formalized risk assessor
+        assessor = RiskAssessor()
+        report = assessor.assess(
+            query=query,
+            answer=answer,
+            claims=claims,
+            evidence=evidence,
+        )
 
-        answer_lower = answer.lower()
-        for keyword in risk_keywords:
-            if keyword in answer_lower:
-                findings.append({
-                    "description": f"Risk-related content detected: '{keyword}'",
-                    "severity": _classify_severity(keyword),
-                    "source": "answer",
-                })
+        # Store findings as dicts (for JSON serialization)
+        state["findings"] = [f.model_dump() for f in report.findings]
 
-        # Also check evidence for risk content
-        for ev in evidence:
-            ev_text = ev.get("text", "").lower()
-            for keyword in risk_keywords:
-                if keyword in ev_text:
-                    findings.append({
-                        "description": f"Evidence contains: '{keyword}'",
-                        "severity": _classify_severity(keyword),
-                        "source": ev.get("document_id", "unknown"),
-                    })
-
-        state["findings"] = findings
-
-        log.info("agent.risk.complete", findings=len(findings))
+        log.info(
+            "agent.risk.complete",
+            findings=report.total_findings,
+            score=report.overall_risk_score,
+            level=report.risk_level,
+        )
     except Exception as e:
         log.error("agent.risk.failed", error=str(e))
         state["errors"].append(f"risk: {e}")

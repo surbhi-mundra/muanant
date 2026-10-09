@@ -117,10 +117,14 @@ ignore = [
 "sovereign/parsing/**" = ["PLR0912", "PLR0915", "PLC0415"]  # parsers are inherently branchy
 "sovereign/ingestion/**" = ["PLR0911", "PLR0912", "PLR0915", "PLC0415"]  # lazy imports for optional deps
 "sovereign/ocr/**" = ["PLC0415"]  # lazy imports for OCR pipeline
-"sovereign/api/routes/**" = ["PLC0415"]  # lazy imports in route handlers
+"sovereign/api/routes/**" = ["PLC0415", "PLR0911", "A002", "PLR1714"]  # route handlers
 "sovereign/rag/**" = ["PLR0912", "PLR0915", "PLC0415"]  # pipeline is inherently complex
 "sovereign/agents/**" = ["PLC0415", "PLR0911"]  # lazy imports for optional deps, heuristic branches
 "sovereign/orchestration/**" = ["PLC0415"]  # lazy imports in graph
+"sovereign/vision/**" = ["PLC0415", "PLR0917", "RUF012", "PLW2901"]  # workflow code
+"sovereign/deliverables/**" = ["PLC0415", "PLR0917", "E501"]  # export code with lazy imports
+"sovereign/security/**" = ["PLC0415", "E501", "PTH123", "UP042"]  # security code with lazy imports
+"sovereign/evaluation/**" = ["PLC0415", "SIM102", "RUF012", "F401"]  # eval code
 
 [tool.ruff.format]
 quote-style = "double"

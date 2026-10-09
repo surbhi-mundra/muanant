@@ -15,6 +15,7 @@ from sovereign.api.middleware import (
     unhandled_exception_handler,
 )
 from sovereign.api.routes.agents import router as agents_router
+from sovereign.api.routes.deliverables import router as deliverables_router
 from sovereign.api.routes.documents import router as documents_router
 from sovereign.api.routes.health import router as health_router
 from sovereign.api.routes.knowledge_base import router as kb_router
@@ -91,6 +92,7 @@ def create_app() -> FastAPI:
     app.include_router(kb_router)
     app.include_router(rag_router)
     app.include_router(agents_router)
+    app.include_router(deliverables_router)
 
     @app.get("/", tags=["root"])
     async def root() -> dict[str, str]:

@@ -1,0 +1,262 @@
+# SOVEREIGN — Kubernetes Deployment (Tier 3: enterprise GPU server)
+#
+# Deploys: API, Workbench, Qdrant, PostgreSQL
+# Assumes: NVIDIA GPU operator installed, GPU node labeled
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: sovereign
+
+---
+# PostgreSQL
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: sovereign-db
+  namespace: sovereign
+spec:
+  serviceName: sovereign-db
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sovereign-db
+  template:
+    metadata:
+      labels:
+        app: sovereign-db
+    spec:
+      containers:
+        - name: postgres
+          image: postgres:16-alpine
+          env:
+            - name: POSTGRES_USER
+              value: sovereign
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: sovereign-db-secret
+                  key: password
+            - name: POSTGRES_DB
+              value: sovereign
+          ports:
+            - containerPort: 5432
+          volumeMounts:
+            - name: pgdata
+              mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:
+    - metadata:
+        name: pgdata
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 50Gi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sovereign-db
+  namespace: sovereign
+spec:
+  selector:
+    app: sovereign-db
+  ports:
+    - port: 5432
+
+---
+# Qdrant
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: sovereign-qdrant
+  namespace: sovereign
+spec:
+  serviceName: sovereign-qdrant
+  replicas: 1
+  selector:
+    matchLabels:
+      app: sovereign-qdrant
+  template:
+    metadata:
+      labels:
+        app: sovereign-qdrant
+    spec:
+      containers:
+        - name: qdrant
+          image: qdrant/qdrant:latest
+          ports:
+            - containerPort: 6333
+          volumeMounts:
+            - name: qdrant-data
+              mountPath: /qdrant/storage
+  volumeClaimTemplates:
+    - metadata:
+        name: qdrant-data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 100Gi
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sovereign-qdrant
+  namespace: sovereign
+spec:
+  selector:
+    app: sovereign-qdrant
+  ports:
+    - port: 6333
+
+---
+# SOVEREIGN API
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sovereign-api
+  namespace: sovereign
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: sovereign-api
+  template:
+    metadata:
+      labels:
+        app: sovereign-api
+    spec:
+      containers:
+        - name: api
+          image: sovereign-api:latest
+          ports:
+            - containerPort: 8000
+          env:
+            - name: SOVEREIGN_ENV
+              value: prod
+            - name: DATABASE_URL
+              value: postgresql+psycopg://sovereign:$(DB_PASSWORD)@sovereign-db:5432/sovereign
+            - name: QDRANT_URL
+              value: http://sovereign-qdrant:6333
+            - name: EGRESS_ENABLED
+              value: "false"
+            - name: SOVEREIGN_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: sovereign-api-secret
+                  key: jwt-secret
+          resources:
+            requests:
+              memory: "1Gi"
+              cpu: "500m"
+            limits:
+              memory: "4Gi"
+              cpu: "2000m"
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8000
+            initialDelaySeconds: 10
+            periodSeconds: 30
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sovereign-api
+  namespace: sovereign
+spec:
+  selector:
+    app: sovereign-api
+  ports:
+    - port: 8000
+
+---
+# Workbench (Next.js)
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: sovereign-workbench
+  namespace: sovereign
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: sovereign-workbench
+  template:
+    metadata:
+      labels:
+        app: sovereign-workbench
+    spec:
+      containers:
+        - name: workbench
+          image: sovereign-workbench:latest
+          ports:
+            - containerPort: 3000
+          env:
+            - name: SOVEREIGN_API_URL
+              value: http://sovereign-api:8000
+          resources:
+            requests:
+              memory: "256Mi"
+              cpu: "100m"
+            limits:
+              memory: "512Mi"
+              cpu: "500m"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sovereign-workbench
+  namespace: sovereign
+spec:
+  type: LoadBalancer
+  selector:
+    app: sovereign-workbench
+  ports:
+    - port: 80
+      targetPort: 3000
+
+---
+# Ingress (optional)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: sovereign-ingress
+  namespace: sovereign
+  annotations:
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  tls:
+    - hosts:
+        - sovereign.local
+      secretName: sovereign-tls
+  rules:
+    - host: sovereign.local
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: sovereign-workbench
+                port:
+                  number: 80
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: sovereign-api
+                port:
+                  number: 8000

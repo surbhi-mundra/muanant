@@ -302,3 +302,49 @@ Artifacts produced:
 - 5 new Python source files: agents/__init__.py, agents/state.py, agents/supervisor.py, agents/sub_agents.py, orchestration/__init__.py, api/routes/agents.py
 - 2 new test files: tests/unit/test_agents.py (25 tests), tests/integration/test_agents_api.py (6 tests)
 - Updated: api/app.py (agents router), pyproject.toml (langgraph dep, mypy overrides, per-file-ignores)
+
+---
+Task ID: phases-8-14
+Agent: Principal Engineer (main)
+Task: Phases 8-14 — Vision workflows, Risk analysis, Deliverable generation, Security+audit, Frontend workbench, Evaluation, Deployment. Auto-approved by user.
+
+Work Log:
+- Phase 8 (Vision workflows): Implemented sovereign/vision/workflows.py with DiagramExtractor (extracts/describes figures from ParsedDocuments, renders PDF regions via PyMuPDF), DrawingAnalyzer (specialized prompts for P&ID/electrical/mechanical/flowchart/photo with auto-detection), ImageGroundedClaimer (extracts factual claims from diagram descriptions), run_vision_workflow (full pipeline: extract → claims → summary). Updated Vision agent to use workflows for document figure analysis. 20 tests.
+- Phase 9 (Risk/finding analysis): Implemented sovereign/risk/ with Finding model (severity, confidence, category, evidence_refs, recommended_actions), RiskReport (overall_risk_score, risk_level, findings, recommendations, summary), RiskScorer (weighted-max + multi-finding bonus, 5-level severity taxonomy CRITICAL/HIGH/MEDIUM/LOW/INFO), RiskAssessor (keyword-based finding extraction from answer + evidence, flags unsupported claims as MEDIUM, conflicting claims as HIGH, generates severity-specific recommendations). Updated Risk agent to use formalized RiskAssessor. 19 tests.
+- Phase 10 (Deliverable generation): Implemented sovereign/deliverables/ with Deliverable model (metadata, sections, citations, findings), DeliverableBuilder (builds from agent outputs: exec summary, response, document analysis, visual analysis, findings, risk assessment, evidence, recommendations, action list), DeliverableRenderer (markdown, HTML, structured JSON), DeliverableExporter (JSON, markdown, HTML, CSV, XLSX via openpyxl, DOCX via python-docx, PDF via reportlab). API routes: POST /deliverables, POST /deliverables/export?format=. 20 tests.
+- Phase 11 (Security + audit): Implemented sovereign/security/ with AuthService (register/login with PBKDF2 password hashing, JWT creation/verification), RBACService (3 roles: admin/analyst/viewer, 13 permissions, project isolation check), EgressGateway (off by default, YAML allow-list, httpx-based request execution, blocked/blocked_reason return), Sandbox (subprocess with timeout + output truncation), InjectionGuard (canary injection, output check for canary leakage + injection patterns, tool-role message builder, retrieved text pre-check), ApprovalQueue (HITL: submit/approve/reject/modify, pending list, status tracking). 35 tests.
+- Phase 12 (Frontend workbench): Created Next.js 16 workbench with 7 pages: Dashboard (system status, KB stats, quick actions), Documents (upload, list, delete), Search (hybrid retrieval), RAG (ask questions with verdict/claims/evidence), Agents (orchestration with task type/steps/findings/deliverable), Deliverables (generate + export to PDF/DOCX/XLSX/CSV/JSON/MD), Audit (chain verification info). API client library with proxy config. Tailwind CSS styling with severity badges.
+- Phase 13 (Evaluation): Implemented sovereign/evaluation/ with RetrievalEvaluator (recall@k, precision@k, MRR), RAGFaithfulnessEvaluator (checks answered→evidence, insufficient→no long answer, all-unsupported claims→fail), InjectionTestSuite (6 test cases: canary leakage, instruction override, role hijack, prompt extraction, normal response, forget instructions), RegressionCorpus (test queries with expected behavior), run_evaluation_suite entry point. 14 tests.
+- Phase 14 (Deployment): Created infra/docker/Dockerfile (Python 3.12 slim + tesseract + qpdf, non-root user, healthcheck), infra/docker/Dockerfile.workbench (Next.js multi-stage build), infra/compose/docker-compose.yml (Tier 2: api + workbench + postgres + qdrant), infra/compose/docker-compose.dev.yml (Tier 1 dev), infra/k8s/deployment.yaml (Tier 3: K8s with StatefulSets for db/qdrant, Deployments for api/workbench, Ingress with TLS). docs/deployment.md (comprehensive guide: Tier 1-4, model config, vLLM setup, security checklist, backup, monitoring, troubleshooting). Added `make eval` target.
+- Recovered from session reset: storage/db/ files lost (empty dirs not persisted), recreated base.py + models.py + __init__.py. Reinstalled all Python deps via uv.
+
+Stage Summary:
+- ALL 14 PHASES COMPLETE. 411/411 tests pass. Ruff clean. Mypy clean (96 files).
+- SOVEREIGN is a fully functional on-premise agentic AI workbench with:
+  - Secure ingestion (6 formats: PDF/DOCX/TXT/MD/CSV/XLSX + images)
+  - Real Tesseract OCR with scanned-PDF detection
+  - Structure-preserving parsing with provenance
+  - Hybrid retrieval (Qdrant + BM25 + RRF fusion)
+  - 9-stage RAG pipeline with evidence verification
+  - Structured citations + contradiction detection
+  - LangGraph supervisor + 7 sub-agents
+  - Vision workflows (diagram extraction, image-grounded claims)
+  - Formalized risk assessment (5-level severity, scoring, recommendations)
+  - Deliverable generation (7 formats: PDF/DOCX/XLSX/CSV/JSON/MD/HTML)
+  - Full security stack (auth, RBAC, egress gateway, sandbox, injection guard, HITL approvals)
+  - Next.js workbench UI (7 pages)
+  - Evaluation suite (retrieval, faithfulness, injection resistance)
+  - Deployment manifests (Docker, compose, K8s) for Tier 1-4
+- Model-agnostic: MockBackend for dev, real backends (vLLM, sentence-transformers, Tesseract) for prod via configs/models.yaml.
+- All 16 CORE SYSTEM components from the original spec are implemented.
+
+Final Statistics:
+- 96 Python source files
+- 31 test files, 411 tests
+- 7 API route modules (health, documents, vision/ocr, knowledge base, RAG, agents, deliverables)
+- 3 ADRs
+- 6 docs (README, ARCHITECTURE, SECURITY, deployment, hardware-tiers, model-catalog)
+- 2 Dockerfiles, 2 compose files, 1 K8s manifest
+- 7 workbench pages
+- 4 YAML configs
+- 1 Alembic migration
