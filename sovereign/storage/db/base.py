@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from contextlib import contextmanager
+from typing import Any
 
 from pymongo import ASCENDING, MongoClient
 from pymongo.database import Database
@@ -26,11 +27,11 @@ COLLECTIONS = {
 }
 
 # Global client
-_client: MongoClient | None = None
-_db: Database | None = None
+_client: MongoClient[Any] | None = None
+_db: Database[Any] | None = None
 
 
-def get_client(settings: Settings | None = None) -> MongoClient:
+def get_client(settings: Settings | None = None) -> MongoClient[Any]:
     """Return the cached MongoDB client.
 
     If the URL contains ``mock``, uses mongomock for in-process testing.
@@ -57,7 +58,7 @@ def get_client(settings: Settings | None = None) -> MongoClient:
     return _client
 
 
-def get_db(settings: Settings | None = None) -> Database:
+def get_db(settings: Settings | None = None) -> Database[Any]:
     """Return the cached MongoDB database."""
     global _db  # noqa: PLW0603
     if _db is None:
@@ -73,7 +74,7 @@ def get_db(settings: Settings | None = None) -> Database:
 
 
 @contextmanager
-def session_scope() -> Iterator[Database]:
+def session_scope() -> Iterator[Database[Any]]:
     """Context manager: yields the MongoDB database.
 
     MongoDB doesn't have sessions like SQLAlchemy. This is kept for
@@ -116,7 +117,7 @@ def init_schema() -> None:
     ensure_indexes(db)
 
 
-def ensure_indexes(db: Database | None = None) -> None:
+def ensure_indexes(db: Database[Any] | None = None) -> None:
     """Create indexes without dropping data. Safe to call on startup."""
     if db is None:
         db = get_db()

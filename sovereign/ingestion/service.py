@@ -109,7 +109,8 @@ def validate_document(
             quarantine_reason=f"file exceeds {max_size_mb}MB limit",
         )
     mime = _detect_mime(data, filename, client_mime)
-    if mime not in supported_mimes() and mime not in ("application/zip", "application/octet-stream"):
+    supported = supported_mimes()
+    if mime not in supported and mime not in ("application/zip", "application/octet-stream"):
         warnings.append(f"unsupported MIME type: {mime}")
     sha256 = hashlib.sha256(data).hexdigest()
     if mime == "application/pdf":
@@ -233,7 +234,10 @@ async def ingest_document(
             parsed.source_sha256 = validation.sha256
             parse_warnings.extend(parsed.parse_warnings)
         except Exception as e:
-            log.error("ingestion.ocr_image.failed", document_id=doc_id, filename=filename, error=str(e))
+            log.error(
+                "ingestion.ocr_image.failed",
+                document_id=doc_id, filename=filename, error=str(e),
+            )
             parse_warnings.append(f"image OCR failed: {e}")
     elif validation.mime_type == "application/pdf":
         try:
@@ -259,7 +263,10 @@ async def ingest_document(
                 parsed.source_sha256 = validation.sha256
                 parse_warnings.extend(parsed.parse_warnings)
         except Exception as e:
-            log.error("ingestion.pdf_ocr.failed", document_id=doc_id, filename=filename, error=str(e))
+            log.error(
+                "ingestion.pdf_ocr.failed",
+                document_id=doc_id, filename=filename, error=str(e),
+            )
             try:
                 parsed = parse_document(data, filename, validation.mime_type)
                 parsed.document_id = doc_id
@@ -267,7 +274,10 @@ async def ingest_document(
                 parsed.source_sha256 = validation.sha256
                 parse_warnings.extend(parsed.parse_warnings)
             except Exception as e2:
-                log.error("ingestion.parse.failed", document_id=doc_id, filename=filename, error=str(e2))
+                log.error(
+                    "ingestion.parse.failed",
+                    document_id=doc_id, filename=filename, error=str(e2),
+                )
                 parse_warnings.append(f"parse failed: {e2}")
     else:
         try:

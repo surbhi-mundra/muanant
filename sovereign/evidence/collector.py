@@ -117,7 +117,7 @@ def _lookup_filenames(project_id: str, document_ids: set[str]) -> dict[str, str]
 
     result: dict[str, str] = {}
     try:
-        from sovereign.storage.db.base import COLLECTIONS, session_scope
+        from sovereign.storage.db.base import COLLECTIONS, session_scope  # noqa: PLC0415
 
         with session_scope() as db:
             cursor = db[COLLECTIONS["documents"]].find(

@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Annotated
+from typing import Annotated, Any
 
 from fastapi import Depends, Request
+from pymongo.database import Database
 
 from sovereign.core.config import Settings, get_settings
 from sovereign.models.gateway import ModelGateway, get_model_gateway
@@ -16,7 +17,7 @@ def get_app_settings() -> Settings:
     return get_settings()
 
 
-def get_request_db(request: Request):
+def get_request_db(request: Request) -> Database[Any]:
     """DI for MongoDB database object."""
     return get_db()
 
