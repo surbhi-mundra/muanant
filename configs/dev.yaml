@@ -1,0 +1,17 @@
+# SOVEREIGN dev environment defaults.
+# These are loaded by sovereign.core.config.get_settings() and override the
+# Settings class defaults. Environment variables override these in turn.
+
+env: dev
+log_level: INFO
+log_format: console
+
+database_url: sqlite:///./sovereign.db
+
+object_store_type: fs
+object_store_fs_root: ./storage/objects
+
+egress_enabled: false
+
+sovereign_host: 127.0.0.1
+sovereign_port: 8000

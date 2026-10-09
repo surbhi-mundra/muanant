@@ -1,0 +1,20 @@
+# SOVEREIGN prod environment defaults.
+# Copy to configs/prod.local.yaml for site-specific overrides (gitignored).
+
+env: prod
+log_level: INFO
+log_format: json
+
+# Postgres with RLS (Phase 11)
+database_url: postgresql+psycopg://sovereign:CHANGE_ME@db:5432/sovereign
+
+# Qdrant server mode
+qdrant_url: http://qdrant:6333
+
+object_store_type: fs
+object_store_fs_root: /var/lib/sovereign/objects
+
+egress_enabled: false  # Even in prod, egress is opt-in per request.
+
+sovereign_host: 0.0.0.0
+sovereign_port: 8000

@@ -1,2 +1,100 @@
+# SOVEREIGN .gitignore
+
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+dist/
+*.egg-info/
+.eggs/
+.installed.cfg
+*.egg
+MANIFEST
+
+# --- Virtual envs ---
+.venv/
+venv/
+env/
+ENV/
+
+# --- Testing / coverage ---
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.cache
+nosetests.xml
+coverage.xml
+
+# --- Type checkers / linters ---
+.mypy_cache/
+.ruff_cache/
+.pyre/
+.pytype/
+
+# --- Editors / IDEs ---
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# --- SOVEREIGN runtime artifacts ---
+var/
+data/
+logs/
+*.log
+*.sqlite
+*.sqlite3
+*.db
+sovereign.db
+
+# --- Secrets / env ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+secrets.yaml
+
+# --- Local config overrides ---
+configs/local.yaml
+configs/*.local.yaml
+
+# --- Model caches (downloaded at runtime, never committed) ---
+models_cache/
+*.gguf
+*.safetensors
+*.bin
+
+# --- Uploads / quarantined files (never committed) ---
+uploads/
+quarantine/
+storage/
+
+# --- Frontend (Next.js) ---
+workbench/node_modules/
+workbench/.next/
+workbench/out/
+workbench/build/
+workbench/.vercel/
+workbench/*.tsbuildinfo
+workbench/.env*.local
+
+# --- Ambient project files (not part of SOVEREIGN) ---
 skills/
 node_modules/
+download/
+upload/
+
+# --- OS / misc ---
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/

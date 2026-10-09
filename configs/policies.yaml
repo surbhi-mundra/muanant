@@ -1,0 +1,70 @@
+# SOVEREIGN security policies.
+#
+# This file is loaded by sovereign.security.egress and other policy
+# enforcement points. Changes here take effect on app restart.
+
+# Network egress — controls which external hosts the Research Agent (and only
+# the Research Agent) may contact. Empty allowlist = egress fully blocked
+# even when EGRESS_ENABLED=true.
+egress:
+  enabled: false
+  allowlist:
+    # - host: api.crossref.org
+    #   port: 443
+    #   reason: "Bibliographic lookup for Research Agent"
+    # - host: standards.ieee.org
+    #   port: 443
+    #   reason: "Standards lookup for Risk Agent"
+
+# Per-agent tool allow-lists. An agent may only invoke tools listed here.
+# Tools not listed are denied at the sandbox boundary regardless of what the
+# LLM emits.
+tool_allowlists:
+  supervisor:
+    - rag.query
+    - delegate_to
+    - request_approval
+  doc_intel:
+    - parse.document
+    - ocr.recognize
+    - extract.tables
+    - extract.metadata
+  vision:
+    - vision.describe
+    - vision.extract_diagram
+  rag:
+    - rag.query
+    - rag.retrieve_chunks
+  research:
+    - egress.http_get
+    - egress.http_post
+  evidence_verify:
+    - evidence.match
+    - evidence.classify
+  risk:
+    - risk.score
+    - risk.recommend
+  deliverable:
+    - deliverable.render
+    - deliverable.export
+
+# Document ingestion guards. Documents exceeding these are quarantined
+# pending admin review, not auto-rejected (admin can override).
+ingestion:
+  max_size_mb: 200
+  max_pages: 2000
+  quarantine_on_oom: true
+  quarantine_on_parse_error: true
+  # Subprocess limits for parsing untrusted documents.
+  parse_timeout_seconds: 120
+  parse_max_memory_mb: 1024
+
+# Prompt-injection defenses.
+prompt_injection:
+  # Treat retrieved/extracted doc text as data, not instructions. Always
+  # inject as tool/user role, never system.
+  retrieved_text_role: tool
+  # Canary tokens injected into retrieved text; if they appear in the LLM
+  # output, the response is flagged as a possible exfiltration attempt.
+  enable_canary: true
+  canary_prefix: "DOCID-"
