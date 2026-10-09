@@ -7,6 +7,7 @@ a placeholder — overridden here.
 
 from __future__ import annotations
 
+import os
 import sys
 from logging.config import fileConfig
 from pathlib import Path
@@ -27,8 +28,12 @@ config = context.config
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-# Override URL from settings
-config.set_main_option("sqlalchemy.url", get_settings().database_url)
+# Override URL from settings — with fallback for invalid URLs
+db_url = get_settings().database_url
+if not db_url or not db_url.startswith(("sqlite", "postgresql", "mysql", "mssql")):
+    # Fall back to a local SQLite file if DATABASE_URL is invalid/missing
+    db_url = "sqlite:///./sovereign.db"
+config.set_main_option("sqlalchemy.url", db_url)
 
 target_metadata = Base.metadata
 
