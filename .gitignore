@@ -76,7 +76,8 @@ models_cache/
 # --- Uploads / quarantined files (never committed) ---
 uploads/
 quarantine/
-storage/
+/storage/
+storage/objects/
 
 # --- Frontend (Next.js) ---
 workbench/node_modules/
