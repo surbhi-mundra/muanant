@@ -192,3 +192,40 @@ Artifacts produced:
 - 6 new Python source files: embeddings/__init__.py, embeddings/service.py, embeddings/indexing.py, storage/qdrant.py, retrieval/__init__.py, retrieval/keyword.py, retrieval/fusion.py, retrieval/service.py, api/routes/knowledge_base.py
 - 3 new test files: tests/unit/test_embeddings.py (13 tests), tests/unit/test_retrieval.py (18 tests), tests/integration/test_kb_api.py (8 tests)
 - Updated: ingestion/service.py (auto-indexing + index cleanup on delete), api/app.py (kb router), existing tests (status assertions)
+
+---
+Task ID: phase-5
+Agent: Principal Engineer (main)
+Task: Phase 5 — Hybrid RAG: 9-stage grounded retrieval pipeline. Build query understanding, rewriting, hybrid retrieval (reuse Phase 4), reranking, evidence selection, LLM reasoning (grounded, tool-role context), evidence verification (SUPPORTED/PARTIAL/UNSUPPORTED/CONFLICTING), and "insufficient evidence" as a first-class verdict.
+
+Work Log:
+- Implemented sovereign/rag/model.py: typed pipeline I/O — EvidenceRef (document_id, chunk_id, page, section_path, text), Claim (text, evidence, support_status), SupportStatus (SUPPORTED/PARTIALLY_SUPPORTED/UNSUPPORTED/CONFLICTING), Verdict (answered/insufficient_evidence/out_of_scope), QueryAnalysis (intent, key_terms, constraints, rewritten_queries), RAGResponse (query, verdict, answer, claims, evidence, pipeline_trace). Verdict.insufficient_evidence() is a first-class factory — "I don't have sufficient evidence" is a successful explicit response, not an error.
+- Implemented sovereign/rag/understand.py (Stage 1): query understanding via LLM with structured JSON prompt. Intent classification (factual/procedural/analytical/comparative/definitional/conversational), key term extraction, constraint extraction. Falls back to heuristic classification (keyword-based) when LLM returns invalid JSON or in mock mode.
+- Implemented sovereign/rag/rewrite.py (Stage 2): query expansion — original query + LLM-rewritten queries + keyword-focused query from extracted key terms. Deduplicates. Returns list of query strings for multi-query retrieval.
+- Implemented sovereign/reranking/service.py (Stage 5): reranking via the Reranker protocol. Converts RetrievalResults → RerankCandidates, calls the reranker, maps back to RetrievalResults in new order. Uses MockReranker (Jaccard overlap) in dev, cross-encoder in prod.
+- Implemented sovereign/rag/select.py (Stage 6): evidence selection with score threshold, top_k limit, and max_per_document diversity cap. Returns EvidenceRef objects with full provenance (document_id, chunk_id, page, section_path, text).
+- Implemented sovereign/rag/reason.py (Stage 7): grounded answer generation. Evidence injected as `tool` role messages (NEVER `system`, per ADR 0003). System prompt explicitly instructs: answer ONLY from evidence, cite by [1][2], say "I don't have sufficient evidence" if evidence doesn't answer, never fabricate citations. Returns empty-evidence message if no evidence provided.
+- Implemented sovereign/rag/verify.py (Stage 8): evidence verification. Splits answer into claims (sentence-level), verifies each claim against evidence via LLM with structured JSON prompt. Returns Claim objects with SupportStatus. Falls back to text-overlap heuristic (SUPPORTED >60% overlap, PARTIALLY_SUPPORTED >30%, UNSUPPORTED <30%) when LLM fails or in mock mode. Filters out short fragments, citation-only refs, and the insufficient-evidence message from claims.
+- Implemented sovereign/rag/pipeline.py (Stage 9): RAGPipeline orchestrating all 9 stages. Configurable: retrieval_top_k=20, rerank_top_k=10, evidence_top_k=5, min_score=0.01, max_per_document=3, verify_claims=True, min_evidence_count=1, min_supported_claims_ratio=0.3. Returns insufficient_evidence verdict when: (a) <min_evidence_count chunks found, (b) LLM self-reports insufficient, (c) <30% of claims are SUPPORTED. Pipeline trace populated for debugging/audit. Singleton factory with reset for tests.
+- Implemented sovereign/api/routes/rag.py: POST /rag/query endpoint. Accepts {query, document_id?}, returns {verdict, verdict_message, answer, claims[], evidence[], is_answered}. Wired into app.py.
+- Wrote 2 new test files (37 new tests):
+  - test_rag.py: 31 unit tests across 7 test classes: TestQueryUnderstanding (6: analysis type, heuristic intent detection for procedural/definitional/comparative/analytical, key term extraction), TestQueryRewriting (4: original-first, keyword query, rewritten queries, dedup), TestReranking (1: count preservation + relevance ordering), TestEvidenceSelection (5: EvidenceRef type, top_k, min_score, max_per_document, empty), TestLLMReasoning (2: with/without evidence), TestEvidenceVerification (6: claim extraction, heuristic verify supported/unsupported/partial, verify_answer returns claims), TestRAGPipeline (6: full pipeline with indexed content, insufficient evidence on empty KB, claims returned, evidence provenance, pipeline trace, document filter)
+  - test_rag_api.py: 6 API integration tests (empty KB, indexed doc query, citations, document filter, response structure, empty query rejected)
+- Fixed lint: E501 (line length in pipeline config, system prompts, test fixtures), PLW2901 (for-loop variable `s` shadowing → renamed to `sent`), removed unused type:ignore.
+- Fixed mypy: SupportStatus return type annotation — cast json.loads result to str, validate against tuple of valid statuses before returning.
+- End-to-end verified: uploaded pump manual → queried "How often does pump P-101 need maintenance?" → pipeline ran all 9 stages → evidence found (2 chunks) → LLM generated answer → evidence verification flagged claims as UNSUPPORTED (mock LLM doesn't produce grounded answers) → pipeline returned insufficient_evidence verdict. This is correct behavior: the system prefers "I don't know" over hallucination. With a real LLM, claims would be SUPPORTED and verdict would be "answered".
+
+Stage Summary:
+- Phase 5 COMPLETE. 241/241 tests pass (204 Phase 1-4 + 37 Phase 5). Ruff clean. Mypy clean (68 files).
+- 9-stage RAG pipeline implemented exactly as specified: understand → rewrite → retrieve → filter → rerank → select → reason → verify → respond.
+- "I don't have sufficient evidence to answer this" is a first-class Verdict, returned when: evidence count < threshold, LLM self-reports insufficient, or <30% of claims are SUPPORTED.
+- Evidence injected as `tool` role (NEVER `system`) per ADR 0003 — prompt injection defense.
+- Every claim carries support_status (SUPPORTED/PARTIALLY_SUPPORTED/UNSUPPORTED/CONFLICTING) — flows through to deliverable rendering (Phase 10).
+- Pipeline trace populated for debugging and audit.
+- API endpoint: POST /rag/query with document filter support.
+- Ready for Phase 6 (Evidence/citations: structured citation model + rendering) upon user approval.
+
+Artifacts produced:
+- 9 new Python source files: rag/__init__.py, rag/model.py, rag/understand.py, rag/rewrite.py, rag/select.py, rag/reason.py, rag/verify.py, rag/pipeline.py, reranking/__init__.py, reranking/service.py, api/routes/rag.py
+- 2 new test files: tests/unit/test_rag.py (31 tests), tests/integration/test_rag_api.py (6 tests)
+- Updated: api/app.py (rag router)
