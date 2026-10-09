@@ -79,14 +79,13 @@ async def index_document(document_id: str) -> JSONResponse:
     )
 
     # Update document status
-    from sovereign.storage.db.base import session_scope
-    from sovereign.storage.db.models import Document as DocModel
+    from sovereign.storage.db.base import COLLECTIONS, session_scope
 
     if result.status == "indexed":
-        with session_scope() as s:
-            db_doc = s.query(DocModel).filter(DocModel.id == document_id).first()
-            if db_doc:
-                db_doc.status = "indexed"
+        with session_scope() as db:
+            db[COLLECTIONS["documents"]].update_one(
+                {"id": document_id}, {"$set": {"status": "indexed"}}
+            )
 
     return JSONResponse(
         status_code=200,

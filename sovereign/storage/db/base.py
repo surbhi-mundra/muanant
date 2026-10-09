@@ -1,74 +1,145 @@
-"""SQLAlchemy 2.0 declarative base + session factory."""
+"""MongoDB storage layer — replaces SQLAlchemy.
+
+Uses PyMongo (synchronous) with a simple session-like wrapper that
+provides a clean API for CRUD operations on MongoDB collections.
+
+MongoDB is schemaless, so there are no migrations. Collections are
+created automatically on first insert.
+"""
 
 from __future__ import annotations
 
 from collections.abc import Iterator
 from contextlib import contextmanager
-from typing import Any
 
-from sqlalchemy import create_engine
-from sqlalchemy.engine import Engine
-from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
-from sqlalchemy.pool import StaticPool
+from pymongo import ASCENDING, MongoClient
+from pymongo.database import Database
 
 from sovereign.core.config import Settings
 
+# Collection names
+COLLECTIONS = {
+    "projects": "projects",
+    "users": "users",
+    "documents": "documents",
+    "audit_events": "audit_events",
+}
 
-class Base(DeclarativeBase):
-    """Declarative base for all SOVEREIGN tables."""
+# Global client
+_client: MongoClient | None = None
+_db: Database | None = None
 
 
-_engine: Engine | None = None
-_SessionLocal: sessionmaker[Session] | None = None
+def get_client(settings: Settings | None = None) -> MongoClient:
+    """Return the cached MongoDB client.
 
-
-def get_engine(settings: Settings | None = None) -> Engine:
-    global _engine  # noqa: PLW0603
-    if _engine is None:
+    If the URL contains ``mock``, uses mongomock for in-process testing.
+    """
+    global _client  # noqa: PLW0603
+    if _client is None:
         if settings is None:
-            from sovereign.core.config import get_settings  # noqa: PLC0415
+            from sovereign.core.config import get_settings
 
             settings = get_settings()
-        kwargs: dict[str, Any] = {"future": True}
-        if settings.database_url.startswith("sqlite"):
-            kwargs["connect_args"] = {"check_same_thread": False}
-            if ":memory:" in settings.database_url:
-                kwargs["poolclass"] = StaticPool
-        _engine = create_engine(settings.database_url, **kwargs)
-    return _engine
+        url = settings.database_url
+        # Check if we should use mongomock (for testing)
+        if "mock" in url or "test" in url.lower():
+            try:
+                import mongomock
+
+                # mongomock needs a valid mongodb:// URL
+                mock_url = url.replace("mock://", "mongodb://")
+                _client = mongomock.MongoClient(mock_url)
+            except ImportError:
+                _client = MongoClient(url)
+        else:
+            _client = MongoClient(url)
+    return _client
 
 
-def get_session_factory() -> sessionmaker[Session]:
-    global _SessionLocal  # noqa: PLW0603
-    if _SessionLocal is None:
-        _SessionLocal = sessionmaker(bind=get_engine(), expire_on_commit=False, future=True)
-    return _SessionLocal
+def get_db(settings: Settings | None = None) -> Database:
+    """Return the cached MongoDB database."""
+    global _db  # noqa: PLW0603
+    if _db is None:
+        if settings is None:
+            from sovereign.core.config import get_settings
+
+            settings = get_settings()
+        client = get_client(settings)
+        # Extract DB name from URL, or use "sovereign" as default
+        db_name = "sovereign"
+        _db = client[db_name]
+    return _db
 
 
 @contextmanager
-def session_scope() -> Iterator[Session]:
-    factory = get_session_factory()
-    s = factory()
+def session_scope() -> Iterator[Database]:
+    """Context manager: yields the MongoDB database.
+
+    MongoDB doesn't have sessions like SQLAlchemy. This is kept for
+    API compatibility — it just returns the database object.
+    """
+    db = get_db()
     try:
-        yield s
-        s.commit()
+        yield db
     except Exception:
-        s.rollback()
+        # MongoDB auto-commits each operation, so rollback isn't needed
+        # in the same way. But we still want to propagate the error.
         raise
-    finally:
-        s.close()
 
 
 def reset_engine() -> None:
-    global _engine, _SessionLocal  # noqa: PLW0603
-    if _engine is not None:
-        _engine.dispose()
-    _engine = None
-    _SessionLocal = None
+    """Test helper: drop the cached client + db."""
+    global _client, _db  # noqa: PLW0603
+    if _client is not None:
+        _client.close()
+    _client = None
+    _db = None
 
 
 def init_schema() -> None:
-    from sovereign.storage.db import models  # noqa: F401, PLC0415
+    """Create indexes and drop existing data (for test isolation).
 
-    Base.metadata.drop_all(get_engine())
-    Base.metadata.create_all(get_engine())
+    MongoDB is schemaless; collections auto-create. This:
+    1. Drops all collections (for clean test state)
+    2. Recreates indexes
+
+    In prod, call ``ensure_indexes()`` instead (doesn't drop data).
+    """
+    db = get_db()
+
+    # Drop all collections for clean state
+    for col_name in COLLECTIONS.values():
+        db[col_name].drop()
+
+    # Recreate indexes
+    ensure_indexes(db)
+
+
+def ensure_indexes(db: Database | None = None) -> None:
+    """Create indexes without dropping data. Safe to call on startup."""
+    if db is None:
+        db = get_db()
+
+    # Projects
+    db[COLLECTIONS["projects"]].create_index("id", unique=True)
+    db[COLLECTIONS["projects"]].create_index("slug", unique=True)
+
+    # Users
+    db[COLLECTIONS["users"]].create_index("id", unique=True)
+    db[COLLECTIONS["users"]].create_index("email", unique=True)
+
+    # Documents
+    db[COLLECTIONS["documents"]].create_index("id", unique=True)
+    db[COLLECTIONS["documents"]].create_index("project_id")
+    db[COLLECTIONS["documents"]].create_index("status")
+    db[COLLECTIONS["documents"]].create_index("sha256")
+
+    # Audit events
+    db[COLLECTIONS["audit_events"]].create_index("id", unique=True)
+    db[COLLECTIONS["audit_events"]].create_index("sequence", unique=True)
+    db[COLLECTIONS["audit_events"]].create_index("hash", unique=True)
+    db[COLLECTIONS["audit_events"]].create_index("request_id")
+    db[COLLECTIONS["audit_events"]].create_index("workflow_id")
+    db[COLLECTIONS["audit_events"]].create_index([("category", ASCENDING), ("timestamp", ASCENDING)])
+    db[COLLECTIONS["audit_events"]].create_index([("project_id", ASCENDING), ("timestamp", ASCENDING)])

@@ -38,7 +38,7 @@ USER sovereign
 EXPOSE 8000
 
 ENV SOVEREIGN_ENV=prod
-ENV DATABASE_URL=postgresql+psycopg://sovereign:sovereign@db:5432/sovereign
+ENV DATABASE_URL=mongodb://sovereign:sovereign@mongo:27017/sovereign?authSource=admin
 ENV QDRANT_URL=http://qdrant:6333
 ENV OBJECT_STORE_FS_ROOT=/var/lib/sovereign/objects
 

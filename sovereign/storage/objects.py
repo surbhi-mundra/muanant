@@ -99,7 +99,7 @@ def get_object_store(settings: Settings | None = None) -> ObjectStore:
     global _store  # noqa: PLW0603
     if _store is None:
         if settings is None:
-            from sovereign.core.config import get_settings  # noqa: PLC0415
+            from sovereign.core.config import get_settings
 
             settings = get_settings()
         if settings.object_store_type == "fs":

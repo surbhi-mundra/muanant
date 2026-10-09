@@ -16,7 +16,7 @@ from sovereign.storage.qdrant import reset_qdrant_store
 
 @pytest.fixture
 def client(monkeypatch: pytest.MonkeyPatch, tmp_path: pytest.TempPathFactory):
-    monkeypatch.setenv("DATABASE_URL", "sqlite:///:memory:")
+    monkeypatch.setenv("DATABASE_URL", "mock://localhost/sovereign_test")
     monkeypatch.setenv("SOVEREIGN_ENV", "dev")
     monkeypatch.setenv("OBJECT_STORE_FS_ROOT", str(tmp_path / "objects"))
     reset_settings_cache()

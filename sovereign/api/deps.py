@@ -1,16 +1,14 @@
-"""FastAPI dependencies: settings, db session, model gateway."""
+"""FastAPI dependencies: settings, db, model gateway."""
 
 from __future__ import annotations
 
-from collections.abc import Iterator
 from typing import Annotated
 
 from fastapi import Depends, Request
-from sqlalchemy.orm import Session
 
 from sovereign.core.config import Settings, get_settings
 from sovereign.models.gateway import ModelGateway, get_model_gateway
-from sovereign.storage.db import session_scope
+from sovereign.storage.db.base import get_db
 
 
 def get_app_settings() -> Settings:
@@ -18,13 +16,9 @@ def get_app_settings() -> Settings:
     return get_settings()
 
 
-def get_request_db(request: Request) -> Iterator[Session]:
-    """Yield a Session scoped to this request.
-
-    Uses ``session_scope()`` — commits on success, rolls back on error.
-    """
-    with session_scope() as s:
-        yield s
+def get_request_db(request: Request):
+    """DI for MongoDB database object."""
+    return get_db()
 
 
 def get_gateway(request: Request) -> ModelGateway:
@@ -37,5 +31,5 @@ def get_gateway(request: Request) -> ModelGateway:
 
 # Type aliases for use in route signatures
 SettingsDep = Annotated[Settings, Depends(get_app_settings)]
-SessionDep = Annotated[Session, Depends(get_request_db)]
+DBDep = Annotated[object, Depends(get_request_db)]
 GatewayDep = Annotated[ModelGateway, Depends(get_gateway)]

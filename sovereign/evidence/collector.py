@@ -17,8 +17,6 @@ from __future__ import annotations
 from sovereign.core.logging import get_logger
 from sovereign.evidence.model import Citation
 from sovereign.retrieval.service import RetrievalResult
-from sovereign.storage.db.base import session_scope
-from sovereign.storage.db.models import Document
 
 log = get_logger(__name__)
 
@@ -113,27 +111,21 @@ class EvidenceCollector:
 
 
 def _lookup_filenames(project_id: str, document_ids: set[str]) -> dict[str, str]:
-    """Look up original filenames for a set of document IDs.
-
-    Returns {document_id: filename} dict. Silently skips IDs not found
-    (they'll have empty filenames in citations).
-    """
+    """Look up original filenames for a set of document IDs (MongoDB)."""
     if not document_ids:
         return {}
 
     result: dict[str, str] = {}
     try:
-        with session_scope() as s:
-            docs = (
-                s.query(Document)
-                .filter(
-                    Document.project_id == project_id,
-                    Document.id.in_(document_ids),
-                )
-                .all()
+        from sovereign.storage.db.base import COLLECTIONS, session_scope
+
+        with session_scope() as db:
+            cursor = db[COLLECTIONS["documents"]].find(
+                {"project_id": project_id, "id": {"$in": list(document_ids)}},
+                {"id": 1, "original_filename": 1},
             )
-            for d in docs:
-                result[d.id] = d.original_filename
+            for doc in cursor:
+                result[doc["id"]] = doc.get("original_filename", "")
     except Exception as e:
         log.warning("evidence.filename_lookup_failed", error=str(e))
 

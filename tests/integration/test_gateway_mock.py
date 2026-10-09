@@ -22,7 +22,7 @@ from sovereign.storage.db.base import init_schema, reset_engine, session_scope
 
 @pytest.fixture(autouse=True)
 def _fresh_env(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setenv("DATABASE_URL", "sqlite:///:memory:")
+    monkeypatch.setenv("DATABASE_URL", "mock://localhost/sovereign_test")
     monkeypatch.setenv("SOVEREIGN_ENV", "dev")
     from sovereign.core.config import reset_settings_cache
 

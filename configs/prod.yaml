@@ -6,7 +6,7 @@ log_level: INFO
 log_format: json
 
 # Postgres with RLS (Phase 11)
-database_url: postgresql+psycopg://sovereign:CHANGE_ME@db:5432/sovereign
+database_url: mongodb://mongo:27017/sovereign
 
 # Qdrant server mode
 qdrant_url: http://qdrant:6333

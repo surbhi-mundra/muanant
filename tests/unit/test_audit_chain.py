@@ -10,7 +10,7 @@ from sovereign.audit.chain import (
     compute_hash,
 )
 from sovereign.audit.log import read_chain, verify_full_chain, write_event
-from sovereign.storage.db.base import init_schema, reset_engine, session_scope
+from sovereign.storage.db.base import COLLECTIONS, init_schema, reset_engine, session_scope
 
 
 @pytest.fixture(autouse=True)
@@ -22,7 +22,7 @@ def _fresh_db(monkeypatch: pytest.MonkeyPatch):
     """
     from sovereign.core.config import reset_settings_cache
 
-    monkeypatch.setenv("DATABASE_URL", "sqlite:///:memory:")
+    monkeypatch.setenv("DATABASE_URL", "mock://localhost/sovereign_test")
     reset_settings_cache()
     reset_engine()
     init_schema()
@@ -66,8 +66,8 @@ def test_first_event_uses_genesis_prev_hash() -> None:
     """The first event in the chain must have prev_hash == 'genesis'."""
     with session_scope() as s:
         row = write_event(s, _payload("first"))
-    assert row.prev_hash == GENESIS_HASH
-    assert row.sequence == 1
+    assert row["prev_hash"] == GENESIS_HASH
+    assert row["sequence"] == 1
 
 
 def test_chain_links_correctly() -> None:
@@ -76,11 +76,11 @@ def test_chain_links_correctly() -> None:
         r1 = write_event(s, _payload("a"))
         r2 = write_event(s, _payload("b"))
         r3 = write_event(s, _payload("c"))
-    assert r2.prev_hash == r1.hash
-    assert r3.prev_hash == r2.hash
-    assert r1.sequence == 1
-    assert r2.sequence == 2
-    assert r3.sequence == 3
+    assert r2["prev_hash"] == r1["hash"]
+    assert r3["prev_hash"] == r2["hash"]
+    assert r1["sequence"] == 1
+    assert r2["sequence"] == 2
+    assert r3["sequence"] == 3
 
 
 def test_verify_full_chain_returns_true_for_unmodified_chain() -> None:
@@ -94,21 +94,19 @@ def test_verify_full_chain_returns_true_for_unmodified_chain() -> None:
 
 def test_verify_chain_detects_tampering() -> None:
     """Modifying a payload mid-chain must break verification."""
-    with session_scope() as s:
+    with session_scope() as db:
         for i in range(5):
-            write_event(s, _payload(f"action.{i}"))
+            write_event(db, _payload(f"action.{i}"))
 
-    # Tamper: rewrite the payload_json of the middle row without updating the hash.
-    from sqlalchemy import text
-
-    with session_scope() as s:
-        s.execute(
-            text("UPDATE audit_events SET payload_json = :p WHERE sequence = 3"),
-            {"p": '{"action":"tampered"}'},
+    # Tamper: rewrite the payload_json of the middle document without updating the hash.
+    with session_scope() as db:
+        db[COLLECTIONS["audit_events"]].update_one(
+            {"sequence": 3},
+            {"$set": {"payload_json": '{"action":"tampered"}'}},
         )
 
-    with session_scope() as s:
-        assert verify_full_chain(s) is False
+    with session_scope() as db:
+        assert verify_full_chain(db) is False
 
 
 def test_read_chain_returns_ordered_rows() -> None:

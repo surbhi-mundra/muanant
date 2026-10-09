@@ -6,7 +6,7 @@ env: dev
 log_level: INFO
 log_format: console
 
-database_url: sqlite:///./sovereign.db
+database_url: mongodb://localhost:27017/sovereign
 
 object_store_type: fs
 object_store_fs_root: ./storage/objects

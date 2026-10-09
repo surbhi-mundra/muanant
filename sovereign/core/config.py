@@ -72,8 +72,8 @@ class Settings(BaseSettings):
     log_level: Literal["DEBUG", "INFO", "WARNING", "ERROR"] = Field(default="INFO")
     log_format: Literal["json", "console"] = Field(default="json")
 
-    # --- Database ---
-    database_url: str = Field(default="sqlite:///./sovereign.db")
+    # --- Database (MongoDB) ---
+    database_url: str = Field(default="mongodb://localhost:27017/sovereign")
 
     # --- Vector store ---
     qdrant_url: str = Field(default="")

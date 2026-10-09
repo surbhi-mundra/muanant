@@ -13,11 +13,9 @@ from __future__ import annotations
 from fastapi import APIRouter, status
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from sqlalchemy import text
 
 from sovereign import __version__
 from sovereign.api.deps import GatewayDep, SettingsDep
-from sovereign.storage.db.base import get_engine
 
 router = APIRouter(tags=["health"])
 
@@ -45,17 +43,16 @@ async def readyz(settings: SettingsDep, gateway: GatewayDep) -> JSONResponse:
     """Readiness probe. 200 if all checks pass; 503 otherwise."""
     checks: dict[str, str] = {}
 
-    # 1. Database
+    # 1. Database (MongoDB)
     try:
-        engine = get_engine(settings)
-        with engine.connect() as conn:
-            conn.execute(text("SELECT 1"))
+        from sovereign.storage.db.base import COLLECTIONS, get_db
+        db = get_db(settings)
+        db.command("ping")
         checks["database"] = "ok"
     except Exception as e:
         checks["database"] = f"fail: {e.__class__.__name__}"
 
-    # 2. ModelGateway (constructs each backend lazily on first use; readyz
-    #    forces construction to fail fast at startup if the config is bad).
+    # 2. ModelGateway
     try:
         backends = gateway.describe()
         checks["model_gateway"] = "ok: " + ", ".join(
@@ -64,16 +61,14 @@ async def readyz(settings: SettingsDep, gateway: GatewayDep) -> JSONResponse:
     except Exception as e:
         checks["model_gateway"] = f"fail: {e.__class__.__name__}: {e}"
 
-    # 3. Audit chain integrity (cheap: just count rows; full verification is
-    #    a periodic cron job, not per-request).
+    # 3. Audit chain (count events)
     try:
-        engine = get_engine(settings)
-        with engine.connect() as conn:
-            n = conn.execute(text("SELECT COUNT(*) FROM audit_events")).scalar()
+        from sovereign.storage.db.base import COLLECTIONS, get_db
+        db = get_db(settings)
+        n = db[COLLECTIONS["audit_events"]].count_documents({})
         checks["audit"] = f"ok: {n} events"
     except Exception:
-        # Audit table not yet created — fine for a fresh DB.
-        checks["audit"] = "ok: table not yet initialized"
+        checks["audit"] = "ok: collection not yet initialized"
 
     all_ok = all(v.startswith("ok") for v in checks.values())
     code = status.HTTP_200_OK if all_ok else status.HTTP_503_SERVICE_UNAVAILABLE

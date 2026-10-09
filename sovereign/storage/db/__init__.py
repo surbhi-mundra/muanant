@@ -1,24 +1,33 @@
-"""DB package — re-exports the public surface."""
+"""DB package — re-exports the public surface (MongoDB)."""
 
 from sovereign.storage.db.base import (
-    Base,
-    get_engine,
-    get_session_factory,
+    COLLECTIONS,
+    get_client,
+    get_db,
     init_schema,
     reset_engine,
     session_scope,
 )
-from sovereign.storage.db.models import AuditEvent, Document, Project, User
+from sovereign.storage.db.models import (
+    AuditEventDict,
+    DocumentDict,
+    ProjectDict,
+    UserDict,
+    new_audit_event,
+    new_document,
+)
 
 __all__ = [
-    "Base",
-    "AuditEvent",
-    "Document",
-    "Project",
-    "User",
-    "get_engine",
-    "get_session_factory",
+    "COLLECTIONS",
+    "AuditEventDict",
+    "DocumentDict",
+    "ProjectDict",
+    "UserDict",
+    "get_client",
+    "get_db",
     "init_schema",
+    "new_audit_event",
+    "new_document",
     "reset_engine",
     "session_scope",
 ]

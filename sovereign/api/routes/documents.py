@@ -69,7 +69,7 @@ async def upload_document(
         client_mime=file.content_type or "",
     )
     return JSONResponse(
-        status_code=201 if result.status in ("parsed", "stored") else 200,
+        status_code=201 if result.status in ("parsed", "stored", "indexed") else 200,
         content=IngestResponse(
             document_id=result.document_id,
             project_id=result.project_id,

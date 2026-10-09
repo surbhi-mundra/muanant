@@ -1,19 +1,8 @@
 #!/usr/bin/env python3
-"""Verify the integrity of the SOVEREIGN audit chain.
+"""Verify the integrity of the SOVEREIGN audit chain (MongoDB).
 
-Reads every row from ``audit_events``, recomputes each hash, and checks
-that:
-  - the first row's ``prev_hash`` is the literal string ``"genesis"``
-  - each subsequent row's ``prev_hash`` equals the previous row's ``hash``
-  - each row's stored ``hash`` equals the recomputed hash
-
-Exits 0 if the chain is intact, 1 otherwise. Designed to run as a periodic
-cron job in prod.
-
-Usage::
-
-    python scripts/verify_audit_chain.py
-    python scripts/verify_audit_chain.py --database-url postgresql://...
+Reads every document from the ``audit_events`` collection, recomputes each
+hash, and checks that the chain is intact.
 """
 
 from __future__ import annotations
@@ -23,22 +12,17 @@ import os
 import sys
 from pathlib import Path
 
-# Make the project importable
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from sovereign.audit.log import read_chain, verify_full_chain
 from sovereign.core.config import get_settings
 from sovereign.core.logging import configure_logging, get_logger
-from sovereign.storage.db.base import get_engine, session_scope
+from sovereign.storage.db.base import get_db
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument(
-        "--database-url",
-        default=None,
-        help="Override DATABASE_URL for this run only.",
-    )
+    parser.add_argument("--database-url", default=None)
     args = parser.parse_args()
 
     if args.database_url:
@@ -48,12 +32,11 @@ def main() -> int:
     configure_logging(settings)
     log = get_logger("verify_audit_chain")
 
-    # Force engine creation with current settings
-    get_engine(settings)
+    get_db(settings)
 
     try:
-        with session_scope() as s:
-            rows = read_chain(s, since_seq=0, limit=10_000_000)
+        db = get_db()
+        rows = read_chain(db, since_seq=0, limit=10_000_000)
     except Exception as e:
         log.error("audit.chain.read_failed", error=str(e))
         return 2
@@ -64,8 +47,7 @@ def main() -> int:
 
     log.info("audit.chain.read", rows=len(rows), first_seq=rows[0][0], last_seq=rows[-1][0])
 
-    with session_scope() as s:
-        ok = verify_full_chain(s)
+    ok = verify_full_chain(db)
     if ok:
         log.info("audit.chain.ok", rows=len(rows))
         return 0

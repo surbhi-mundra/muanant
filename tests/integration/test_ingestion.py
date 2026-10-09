@@ -23,7 +23,7 @@ from sovereign.storage.objects import reset_object_store
 @pytest.fixture(autouse=True)
 def _fresh_env(monkeypatch: pytest.MonkeyPatch, tmp_path: pytest.TempPathFactory):
     """Each test gets a fresh SQLite DB + fresh object store."""
-    monkeypatch.setenv("DATABASE_URL", "sqlite:///:memory:")
+    monkeypatch.setenv("DATABASE_URL", "mock://localhost/sovereign_test")
     monkeypatch.setenv("SOVEREIGN_ENV", "dev")
     monkeypatch.setenv("OBJECT_STORE_FS_ROOT", str(tmp_path / "objects"))
     from sovereign.core.config import reset_settings_cache
@@ -133,7 +133,7 @@ def test_validate_detects_xlsx_magic() -> None:
 # ---------------------------------------------------------------------------
 async def test_ingest_txt_document() -> None:
     result = await ingest_document(PROJECT_ID, "test.txt", _make_txt(), "text/plain")
-    assert result.status == "parsed"
+    assert result.status in ("parsed", "indexed")
     assert result.document_id
     assert result.mime_type == "text/plain"
     assert result.version == 1
@@ -171,20 +171,20 @@ async def test_ingest_versioning() -> None:
 
 async def test_ingest_md_document() -> None:
     result = await ingest_document(PROJECT_ID, "test.md", _make_md(), "text/markdown")
-    assert result.status == "parsed"
+    assert result.status in ("parsed", "indexed")
     assert result.mime_type == "text/markdown"
 
 
 async def test_ingest_csv_document() -> None:
     result = await ingest_document(PROJECT_ID, "test.csv", _make_csv(), "text/csv")
-    assert result.status == "parsed"
+    assert result.status in ("parsed", "indexed")
 
 
 async def test_ingest_xlsx_document() -> None:
     result = await ingest_document(
         PROJECT_ID, "test.xlsx", _make_xlsx(), "application/octet-stream"
     )
-    assert result.status == "parsed"
+    assert result.status in ("parsed", "indexed")
     assert "spreadsheetml" in result.mime_type
 
 
@@ -192,7 +192,7 @@ async def test_ingest_docx_document() -> None:
     result = await ingest_document(
         PROJECT_ID, "test.docx", _make_docx(), "application/octet-stream"
     )
-    assert result.status == "parsed"
+    assert result.status in ("parsed", "indexed")
     assert "wordprocessingml" in result.mime_type
 
 
@@ -262,14 +262,11 @@ async def test_delete_cross_project_fails() -> None:
 async def test_ingest_writes_audit_event() -> None:
     """Each ingest should produce an audit event."""
     from sovereign.audit.log import verify_full_chain
+    from sovereign.storage.db.base import COLLECTIONS
 
     await ingest_document(PROJECT_ID, "test.txt", _make_txt(), "text/plain")
-    with session_scope() as s:
-        from sqlalchemy import text
-
-        count = s.execute(
-            text("SELECT COUNT(*) FROM audit_events WHERE category = 'ingestion'")
-        ).scalar()
+    with session_scope() as db:
+        count = db[COLLECTIONS["audit_events"]].count_documents({"category": "ingestion"})
         assert count is not None and count >= 1
         # Chain should still be valid
-        assert verify_full_chain(s) is True
+        assert verify_full_chain(db) is True

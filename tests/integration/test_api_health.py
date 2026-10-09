@@ -13,7 +13,7 @@ from sovereign.storage.db.base import init_schema, reset_engine
 
 @pytest.fixture
 def client(monkeypatch: pytest.MonkeyPatch):
-    monkeypatch.setenv("DATABASE_URL", "sqlite:///:memory:")
+    monkeypatch.setenv("DATABASE_URL", "mock://localhost/sovereign_test")
     monkeypatch.setenv("SOVEREIGN_ENV", "dev")
 
     reset_settings_cache()

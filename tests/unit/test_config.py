@@ -56,7 +56,7 @@ def test_dev_yaml_overrides_class_defaults(monkeypatch: pytest.MonkeyPatch) -> N
     # _env_file=None disables .env loading; env_settings still runs but we
     # deleted DATABASE_URL so it won't override yaml.
     s = Settings(_env_file=None)
-    assert "sqlite" in s.database_url  # from dev.yaml
+    assert "mongodb" in s.database_url  # from dev.yaml
     assert s.log_format == "console"  # dev.yaml sets this
 
 

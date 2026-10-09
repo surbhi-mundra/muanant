@@ -25,7 +25,7 @@ from sovereign.core.config import get_settings
 from sovereign.core.errors import SovereignError
 from sovereign.core.logging import configure_logging, get_logger
 from sovereign.models.gateway import get_model_gateway
-from sovereign.storage.db.base import get_engine, init_schema
+from sovereign.storage.db.base import get_db, init_schema
 
 
 @asynccontextmanager
@@ -36,11 +36,11 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     log = get_logger(__name__)
     log.info("sovereign.startup", env=settings.env, version=__version__)
 
-    # In dev, auto-create schema (no Alembic required). Prod uses `make migrate`.
+    # In dev, create indexes (no migrations needed for MongoDB). Prod uses ensure_indexes.
     if settings.is_dev:
         try:
             init_schema()
-            log.info("sovereign.schema.initialized", backend="create_all")
+            log.info("sovereign.schema.initialized", backend="mongodb")
         except Exception as e:
             log.warning("sovereign.schema.init_failed", error=str(e))
 
@@ -53,8 +53,8 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         log.error("sovereign.model_gateway.failed", error=str(e))
         # Don't crash — let /readyz report the failure so ops can fix config.
 
-    # Pre-warm the DB engine
-    get_engine(settings)
+    # Pre-warm the MongoDB connection
+    get_db(settings)
 
     yield
 
