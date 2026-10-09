@@ -98,7 +98,7 @@ async def test_mock_text_llm_json_mode() -> None:
     resp = await llm.complete(
         LLMRequest(messages=[Message(role="user", content="x")], json_mode=True)
     )
-    import json  # noqa: PLC0415
+    import json
 
     parsed = json.loads(resp.content)
     assert "answer" in parsed
@@ -212,8 +212,8 @@ def test_gateway_lazy_construction(gateway: ModelGateway) -> None:
 
 def test_gateway_rejects_missing_backend() -> None:
     """A GatewayConfig with an unknown backend must raise on access."""
-    from sovereign.core.errors import ModelUnavailableError  # noqa: PLC0415
-    from sovereign.models.gateway import GatewayConfig  # noqa: PLC0415
+    from sovereign.core.errors import ModelUnavailableError
+    from sovereign.models.gateway import GatewayConfig
 
     bad_cfg = GatewayConfig(
         text={"backend": "nonexistent.text"},

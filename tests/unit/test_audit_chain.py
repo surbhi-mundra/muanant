@@ -20,7 +20,7 @@ def _fresh_db(monkeypatch: pytest.MonkeyPatch):
     Must reset the settings cache so the new DATABASE_URL env var is read
     on the next ``get_settings()`` call.
     """
-    from sovereign.core.config import reset_settings_cache  # noqa: PLC0415
+    from sovereign.core.config import reset_settings_cache
 
     monkeypatch.setenv("DATABASE_URL", "sqlite:///:memory:")
     reset_settings_cache()
@@ -99,7 +99,7 @@ def test_verify_chain_detects_tampering() -> None:
             write_event(s, _payload(f"action.{i}"))
 
     # Tamper: rewrite the payload_json of the middle row without updating the hash.
-    from sqlalchemy import text  # noqa: PLC0415
+    from sqlalchemy import text
 
     with session_scope() as s:
         s.execute(

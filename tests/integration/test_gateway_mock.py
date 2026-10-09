@@ -24,7 +24,7 @@ from sovereign.storage.db.base import init_schema, reset_engine, session_scope
 def _fresh_env(monkeypatch: pytest.MonkeyPatch):
     monkeypatch.setenv("DATABASE_URL", "sqlite:///:memory:")
     monkeypatch.setenv("SOVEREIGN_ENV", "dev")
-    from sovereign.core.config import reset_settings_cache  # noqa: PLC0415
+    from sovereign.core.config import reset_settings_cache
 
     reset_settings_cache()
     reset_engine()

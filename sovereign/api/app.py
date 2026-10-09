@@ -14,6 +14,7 @@ from sovereign.api.middleware import (
     sovereign_exception_handler,
     unhandled_exception_handler,
 )
+from sovereign.api.routes.documents import router as documents_router
 from sovereign.api.routes.health import router as health_router
 from sovereign.core.config import get_settings
 from sovereign.core.errors import SovereignError
@@ -81,6 +82,7 @@ def create_app() -> FastAPI:
 
     # Routers
     app.include_router(health_router)
+    app.include_router(documents_router)
 
     @app.get("/", tags=["root"])
     async def root() -> dict[str, str]:

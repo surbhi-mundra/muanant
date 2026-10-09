@@ -52,3 +52,51 @@ Artifacts produced:
 - 3 ADRs (0001, 0002, 0003)
 - Makefile, pyproject.toml, ruff/mypy/pytest configs, .pre-commit-config.yaml, .env.example, .gitignore
 - scripts/verify_audit_chain.py (audit integrity CLI)
+
+---
+Task ID: phase-2
+Agent: Principal Engineer (main)
+Task: Phase 2 — Document ingestion. Build secure upload, validation, quarantine, structure-preserving parsers for PDF/DOCX/TXT/MD/CSV/XLSX, chunker with provenance, object store, and API routes.
+
+Work Log:
+- Recovered from session reset: storage/db/ files were lost between sessions (empty dirs not preserved). Recreated base.py, models.py, __init__.py from conversation context. Reinstalled deps via uv.
+- Implemented sovereign/storage/objects.py: FilesystemObjectStore with opaque UUID keys, project-scoped paths (2-char sharding), path traversal rejection, atomic write (tmp+rename), Protocol interface for S3 swap-in later.
+- Implemented sovereign/parsing/model.py: ParsedDocument (pydantic) with Page, Block (heading/paragraph/list_item/table/figure/caption/code/quote/page_break), Table (with TableRow/TableCell), Figure, BoundingBox, DocumentMetadata. Properties: all_blocks, total_text, headings, tables, figures.
+- Implemented 6 parsers:
+  - pdf.py (PyMuPDF/fitz): pages, font-size heading heuristic, text blocks with bounding boxes, image blocks as figures, metadata extraction.
+  - docx.py (python-docx): heading levels from styles, paragraphs, list items, tables with markdown rendering, core properties metadata.
+  - txt.py (chardet): encoding detection, paragraph splitting, ALL-CAPS heading detection, encoding in metadata.
+  - markdown.py (lightweight regex): heading hierarchy with section_path, list items, code fences, tables (pipe syntax), blockquotes, paragraph accumulation.
+  - csv.py (stdlib csv): delimiter detection (comma/semicolon/tab), header+rows as Table, markdown rendering.
+  - xlsx.py (openpyxl): per-sheet table blocks, cell value conversion (int/float/bool/str), sheet names in section_path.
+- Implemented sovereign/parsing/registry.py: MIME→parser dispatch, supported_mimes(), parse_document() entry point.
+- Implemented sovereign/parsing/chunking.py: structure-aware Chunker with target/max/min word limits, overlap. Tables and figures as standalone chunks. Heading boundaries respected. Provenance (page, section_path, chunk_index) on every Chunk. Long text splitting with overlap.
+- Implemented sovereign/ingestion/service.py: full ingestion pipeline:
+  - _detect_mime: magic bytes detection (PDF, ZIP→DOCX/XLSX distinction, text), never trusts client Content-Type alone.
+  - validate_document: size check, MIME detection, SHA-256, qpdf integrity check for PDFs.
+  - ingest_document: validate → dedup (SHA-256) → store (opaque UUID key) → parse → persist Document row → store ParsedDocument JSON → audit event. Quarantine on validation failure. Versioning by filename.
+  - get_document, get_parsed_document, list_documents, delete_document with project isolation.
+- Implemented sovereign/api/routes/documents.py: POST /documents (multipart upload), GET /documents (list), GET /{id} (metadata), GET /{id}/parsed (ParsedDocument JSON), DELETE /{id}. Wired into app.py.
+- Wrote 5 test files (74 new tests):
+  - test_parsing.py: 25 tests across all 6 parsers (format, headings, paragraphs, tables, metadata, section paths, code blocks, blockquotes, cell values, page extraction, registry dispatch).
+  - test_chunking.py: 8 tests (chunk production, heading boundaries, standalone tables, provenance, long text splitting, sequential indices, empty doc, section_label).
+  - test_object_store.py: 12 tests (put/get, exists, idempotent delete, not found, project isolation, path traversal rejection, empty project/key rejection, stream, overwrite, key uniqueness, hex format).
+  - test_ingestion.py: 21 integration tests (validation for all formats, magic byte detection, dedup, versioning, parse+store+retrieve, quarantine, list, delete, project isolation, audit trail).
+  - test_documents_api.py: 8 API integration tests (upload, list, get by ID, get parsed, delete, 404 handling, duplicate, quarantine).
+- Fixed bugs during testing: (1) TXT parser test expectation (Introduction not all-caps = paragraph, correct), (2) chunker long-text splitter using broken sentence-based approach — rewrote with simple word-count sliding window.
+- Fixed lint: RUF012 (ClassVar for parser class attributes), PLC0415 (noqa for lazy imports in parsers/ingestion/tests), PLR0912/0915 (per-file-ignores for inherently branchy parser code), E501 (line length), E741 (ambiguous variable), RUF005 (list concatenation), unused type:ignore in docx imports.
+- Fixed mypy: variable redefinition in pdf.py, None-attribute access in markdown.py table parser (rewrote messy function), optional access in chunking.py figure handling, removed unnecessary type:ignore from docx.py.
+
+Stage Summary:
+- Phase 2 COMPLETE. 132/132 tests pass (58 Phase 1 + 74 Phase 2). Ruff clean. Mypy clean (42 files).
+- All 6 document formats (PDF, DOCX, TXT, MD, CSV, XLSX) parse to a unified ParsedDocument model preserving pages, headings, sections, tables, figures, metadata.
+- Ingestion pipeline: upload → magic-byte MIME detection → SHA-256 dedup → opaque-key storage → structure-preserving parse → DB persist → audit event. Quarantine for invalid files.
+- Object store enforces project isolation and rejects path traversal (security requirement S3).
+- API endpoints: POST /documents, GET /documents, GET /{id}, GET /{id}/parsed, DELETE /{id}.
+- Chunker produces provenance-carrying chunks ready for Phase 4 (embeddings + KB).
+- Ready for Phase 3 (OCR + multimodal processing) upon user approval.
+
+Artifacts produced:
+- 15 new Python source files (parsing/model.py, base.py, pdf.py, docx.py, txt.py, markdown.py, csv.py, xlsx.py, registry.py, chunking.py; ingestion/service.py, __init__.py; storage/objects.py; api/routes/documents.py)
+- 5 new test files (74 tests)
+- Updated: sovereign/api/app.py (documents router), pyproject.toml (per-file-ignores)
