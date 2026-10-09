@@ -145,7 +145,7 @@ async def test_ingest_creates_document_row() -> None:
     doc = get_document(PROJECT_ID, result.document_id)
     assert doc.id == result.document_id
     assert doc.original_filename == "test.txt"
-    assert doc.status == "parsed"
+    assert doc.status in ("parsed", "indexed")
     assert doc.sha256 == result.sha256
 
 

@@ -39,7 +39,7 @@ def test_upload_txt_via_api(client: TestClient) -> None:
     )
     assert resp.status_code == 201, resp.text
     body = resp.json()
-    assert body["status"] == "parsed"
+    assert body["status"] in ("parsed", "indexed")
     assert body["document_id"]
     assert body["mime_type"] == "text/plain"
     assert body["version"] == 1
@@ -155,7 +155,7 @@ def test_upload_image_via_api(client: TestClient) -> None:
     )
     assert resp.status_code == 201, resp.text
     body = resp.json()
-    assert body["status"] == "parsed"
+    assert body["status"] in ("parsed", "indexed")
     assert body["mime_type"] == "image/png"
     assert body["document_id"]
 

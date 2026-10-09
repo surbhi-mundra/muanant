@@ -16,6 +16,7 @@ from sovereign.api.middleware import (
 )
 from sovereign.api.routes.documents import router as documents_router
 from sovereign.api.routes.health import router as health_router
+from sovereign.api.routes.knowledge_base import router as kb_router
 from sovereign.api.routes.vision_ocr import router as vision_ocr_router
 from sovereign.core.config import get_settings
 from sovereign.core.errors import SovereignError
@@ -85,6 +86,7 @@ def create_app() -> FastAPI:
     app.include_router(health_router)
     app.include_router(documents_router)
     app.include_router(vision_ocr_router)
+    app.include_router(kb_router)
 
     @app.get("/", tags=["root"])
     async def root() -> dict[str, str]:

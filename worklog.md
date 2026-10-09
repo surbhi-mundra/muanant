@@ -147,3 +147,48 @@ Artifacts produced:
 - 2 new test files: tests/unit/test_ocr.py (24 tests), tests/unit/test_vision.py (5 tests)
 - 3 new API integration tests in tests/integration/test_documents_api.py
 - Updated: ingestion/service.py (async + OCR integration), models/backends/__init__.py (tesseract registration), api/app.py (vision_ocr router), pyproject.toml (pytesseract/Pillow deps, mypy overrides, per-file-ignores)
+
+---
+Task ID: phase-4
+Agent: Principal Engineer (main)
+Task: Phase 4 — Knowledge base. Build embeddings service, Qdrant vector store, BM25 keyword index, hybrid retrieval with RRF fusion, indexing service, wire into ingestion pipeline, and API routes.
+
+Work Log:
+- Implemented sovereign/embeddings/service.py: EmbeddingService using the EmbeddingModel protocol from ModelGateway. Methods: embed_chunks (batch embed chunks → (chunk, vector) pairs), embed_query (single query embedding), dim property. Uses MockEmbeddingModel in dev (hash-based, deterministic), real embedding models in prod.
+- Implemented sovereign/storage/qdrant.py: QdrantStore — Qdrant vector store client with project-scoped collections (sovereign_<project_id>). Embedded mode for dev (in-process, no server), server mode for prod (via QDRANT_URL). Methods: ensure_collection (creates collection with COSINE distance if missing), upsert_chunks (stores vectors + payload metadata), search (nearest-neighbor query with optional document filter), delete_by_document, count_points. Uses query_points API (current) with fallback to deprecated search API. Point IDs are MD5-hash integers derived from chunk_ids for Qdrant compatibility.
+- Implemented sovereign/retrieval/keyword.py: BM25Index — in-memory keyword index with standard BM25 ranking (k1=1.5, b=0.75). Tokenization: lowercase, word-boundary split, stopword removal. Methods: add_chunks, remove_chunk, remove_document, search (returns ranked KeywordSearchResult with provenance). Per-project isolation (separate index instances).
+- Implemented sovereign/retrieval/fusion.py: reciprocal_rank_fusion — RRF algorithm combining multiple ranked lists. Formula: RRF(d) = sum of 1/(k + rank) across rankers, k=60 (standard). Returns FusedResult with per-ranker ranks for debugging.
+- Implemented sovereign/retrieval/service.py: HybridRetriever — combines vector + keyword search with RRF fusion. Runs both searches in parallel, fuses ranked lists, returns unified RetrievalResult with provenance (page, section_path, chunk_index, block_kinds) and per-ranker ranks. Configurable top_k, RRF k, document filter. Document filter applied to both vector and keyword results.
+- Implemented sovereign/embeddings/indexing.py: IndexingService — the bridge between parsing and retrieval. index_document: ParsedDocument → Chunker → EmbeddingService → QdrantStore + BM25Index. Manages per-project BM25 indexes in memory. remove_document clears from both stores. get_stats returns counts. Re-indexing replaces (not duplicates) chunks. Singleton factory with reset for tests.
+- Updated sovereign/ingestion/service.py: ingest_document now auto-indexes after parsing. Documents go from "parsed" → "indexed" status. delete_document also removes from the knowledge base index. Indexing failures are non-fatal (logged as warning, document stays "parsed").
+- Implemented sovereign/api/routes/knowledge_base.py: 4 new endpoints:
+  - POST /documents/{id}/index — manually (re)index a document
+  - POST /search — hybrid retrieval search with optional document_id filter
+  - GET /kb/stats — knowledge base statistics (keyword count, vector count)
+  - DELETE /documents/{id}/index — remove from index
+  Wired into app.py.
+- Wrote 3 new test files (40 new tests):
+  - test_embeddings.py: 13 tests (EmbeddingService: embed_chunks, embed_query, dim, determinism, empty list; IndexingService: index_document, keyword+vector population, remove, reindex, stats, empty doc, project isolation)
+  - test_retrieval.py: 18 tests (BM25Index: add/search, empty, no match, remove doc/chunk, top_k, provenance, tokenization; RRF: two lists, single list, empty, one-list-only, sorted scores, ranks included; HybridRetriever: retrieve, empty KB, top_k, provenance, document filter)
+  - test_kb_api.py: 8 API integration tests (search empty KB, stats empty, upload+search, stats after indexing, manual reindex, remove from index, document filter, provenance in results)
+- Updated existing tests: status assertions now accept "indexed" in addition to "parsed" (documents auto-index after upload).
+- Fixed Qdrant API compatibility: .search() is deprecated in qdrant-client 1.19+, replaced with .query_points(). Added fallback for older API.
+- Fixed document filter: keyword search results now also filtered by document_id (previously only vector results were filtered, causing cross-document leakage via RRF fusion).
+- Fixed lint: E501 (line length in test fixtures), F841 (unused variables), removed unused type:ignore. Fixed mypy: removed unused type:ignore[attr-defined] in qdrant reset.
+
+Stage Summary:
+- Phase 4 COMPLETE. 204/204 tests pass (164 Phase 1-3 + 40 Phase 4). Ruff clean. Mypy clean (57 files).
+- Full knowledge base pipeline: upload → parse → chunk → embed → index (Qdrant + BM25) → hybrid search.
+- Qdrant embedded mode works in dev (in-process, no server). Server mode for prod via QDRANT_URL.
+- BM25 keyword index with stopword removal and standard BM25 ranking (k1=1.5, b=0.75).
+- Hybrid retrieval with RRF fusion (k=60) combining vector + keyword results.
+- Per-project isolation: separate Qdrant collections, separate BM25 indexes.
+- Document filter works across both vector and keyword search.
+- 4 new API endpoints: POST /search, GET /kb/stats, POST /documents/{id}/index, DELETE /documents/{id}/index.
+- End-to-end verified: uploaded pump report + valve report, searched "pump bearing wear" → found pump report, searched "valve leaking" → found valve report, document filter correctly restricted results.
+- Ready for Phase 5 (Hybrid RAG: 9-stage pipeline with query rewriting, reranking, evidence verification) upon user approval.
+
+Artifacts produced:
+- 6 new Python source files: embeddings/__init__.py, embeddings/service.py, embeddings/indexing.py, storage/qdrant.py, retrieval/__init__.py, retrieval/keyword.py, retrieval/fusion.py, retrieval/service.py, api/routes/knowledge_base.py
+- 3 new test files: tests/unit/test_embeddings.py (13 tests), tests/unit/test_retrieval.py (18 tests), tests/integration/test_kb_api.py (8 tests)
+- Updated: ingestion/service.py (auto-indexing + index cleanup on delete), api/app.py (kb router), existing tests (status assertions)

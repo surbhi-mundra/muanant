@@ -461,6 +461,35 @@ async def ingest_document(
         parsed_key = f"{storage_key}.parsed.json"
         store.put(project_id, parsed_key, parsed.model_dump_json().encode("utf-8"))
 
+        # 7. Index into the knowledge base (vectors + keyword index)
+        try:
+            from sovereign.embeddings.indexing import get_indexing_service
+
+            indexing = get_indexing_service()
+            index_result = await indexing.index_document(
+                project_id=project_id,
+                document_id=doc_id,
+                parsed=parsed,
+            )
+            if index_result.status == "indexed":
+                log.info(
+                    "ingestion.indexed",
+                    document_id=doc_id,
+                    chunks=index_result.chunk_count,
+                )
+                # Update document status to "indexed"
+                with session_scope() as s:
+                    db_doc = s.query(Document).filter(Document.id == doc_id).first()
+                    if db_doc:
+                        db_doc.status = "indexed"
+            else:
+                parse_warnings.append(
+                    f"indexing failed: {index_result.error}"
+                )
+        except Exception as e:
+            log.error("ingestion.index_failed", document_id=doc_id, error=str(e))
+            parse_warnings.append(f"indexing failed: {e}")
+
     log.info(
         "ingestion.complete",
         document_id=doc_id,
@@ -569,6 +598,15 @@ def delete_document(project_id: str, document_id: str) -> None:
     # Delete from object store (after DB commit)
     store.delete(project_id, storage_key)
     store.delete(project_id, f"{storage_key}.parsed.json")
+
+    # Remove from the knowledge base index (vectors + keyword index)
+    try:
+        from sovereign.embeddings.indexing import get_indexing_service
+
+        indexing = get_indexing_service()
+        indexing.remove_document(project_id, document_id)
+    except Exception as e:
+        log.warning("ingestion.delete.index_cleanup_failed", document_id=document_id, error=str(e))
 
 
 # ---------------------------------------------------------------------------
