@@ -261,3 +261,44 @@ Artifacts produced:
 - 5 new Python source files: evidence/__init__.py, evidence/model.py, evidence/collector.py, evidence/contradictions.py, evidence/renderer.py
 - 1 new test file: tests/unit/test_evidence.py (31 tests)
 - Updated: rag/model.py (evidence_report field), rag/pipeline.py (EvidenceReport construction + contradiction detection), api/routes/rag.py (evidence_report in response + markdown endpoint), evidence/__init__.py, pyproject.toml (per-file-ignores)
+
+---
+Task ID: phase-7
+Agent: Principal Engineer (main)
+Task: Phase 7 — Agent orchestration. Build LangGraph supervisor + 7 sub-agents (DocIntel, Vision, RAG, Research, EvidenceVerify, Risk, Deliverable), typed shared state, orchestration graph, and API endpoint.
+
+Work Log:
+- Installed langgraph (v0.6+) and added to pyproject.toml dependencies + mypy overrides.
+- Implemented sovereign/agents/state.py: typed LangGraph state — AgentState (TypedDict with total=False: query, project_id, document_id, task_type, agent_sequence, current_step, rag_response, evidence_report, document_analysis, vision_description, research_results, findings, deliverable, errors, audit_events, steps_completed), TaskType (question/document_analysis/image_analysis/research/risk_assessment/report_generation/multi_step), AgentResponse (pydantic model with succeeded property).
+- Implemented sovereign/agents/supervisor.py: Supervisor agent — classifies user intent via LLM with structured JSON prompt (7 task types + agent sequence), falls back to keyword heuristic classification when LLM fails or in mock mode. Default agent sequences per task type: question→[rag, evidence_verify], document_analysis→[doc_intel], image_analysis→[vision], research→[research], risk_assessment→[rag, evidence_verify, risk], report_generation→[rag, evidence_verify, deliverable], multi_step→[rag, evidence_verify].
+- Implemented sovereign/agents/sub_agents.py: 7 sub-agents, each following the same contract (take AgentState, execute, return updated state, catch errors non-fatally):
+  - rag_agent: runs the 9-stage RAG pipeline (Phase 5), populates rag_response + evidence_report.
+  - doc_intel_agent: retrieves parsed document, returns metadata (page count, word count, headings, tables, figures, text preview).
+  - vision_agent: describes images via VisionService (inspection photos or diagrams), handles document_id-based image retrieval.
+  - research_agent: egress-gated, NO KB access, returns "blocked" when egress is off (default), returns "placeholder" when egress is on but gateway not yet implemented (Phase 11).
+  - evidence_verify_agent: adds verification_summary to evidence_report (total_claims, supported_claims, contradictions_found).
+  - risk_agent: extracts findings using risk keyword detection (failure/critical/danger→CRITICAL, hazard/warning/damage→HIGH, risk/corrosion/wear→MEDIUM), checks both answer and evidence text.
+  - deliverable_agent: combines all prior outputs into a structured deliverable (sections: Answer, Findings, Evidence, metadata with steps_completed + errors).
+- Implemented sovereign/orchestration/__init__.py: AgentOrchestrator — builds LangGraph StateGraph (START→supervisor→conditional routing to sub-agents→END), runs the agent sequence with error handling, returns AgentResponse. Singleton factory with reset for tests. The orchestrator manually steps through the agent_sequence because LangGraph's conditional routing doesn't mutate state between edges — each agent receives the accumulated state from prior agents.
+- Implemented sovereign/api/routes/agents.py: POST /agents/query endpoint. Accepts {query, document_id?}, returns full AgentQueryResponse with all agent outputs. Wired into app.py.
+- Wrote 2 new test files (31 new tests):
+  - test_agents.py: 25 unit tests across 3 test classes: TestSupervisor (7: classify question/document/image/risk/report, heuristic keyword detection, default sequences, current_step initialization), TestSubAgents (10: RAG agent runs + populates response, research blocked by default, evidence verify adds summary + skips without RAG, risk extracts findings with severity + no false positives, deliverable builds report + includes findings, errors are non-fatal), TestOrchestrator (8: run question task, returns AgentResponse, includes steps_completed, empty KB doesn't crash, document_id routing, research blocked, risk assessment routing).
+  - test_agents_api.py: 6 API integration tests (basic query, with document_id, empty rejected, research blocked, risk assessment, all response fields present).
+- Fixed import error: agents/__init__.py was importing from sovereign.agents.graph which doesn't exist — the graph is in sovereign/orchestration/__init__.py. Removed the broken import.
+- Fixed lint: per-file-ignores for agents/ (PLC0415 lazy imports, PLR0911 heuristic branches) and orchestration/ (PLC0415), E501 line length in tests, dict type-arg annotations in API route.
+- Fixed mypy: removed unnecessary type:ignore[typeddict-item] comments (TypedDict total=False doesn't need them), EvidenceReport.model_dump() with explicit import + type:ignore[assignment], LangGraph add_conditional_edges dict key type (dict[object, str] instead of dict[str, str]), removed unused type:ignore comments.
+- End-to-end verified: uploaded document → agent query "What is the maintenance schedule?" → supervisor classified as question → RAG agent ran full 9-stage pipeline → evidence collected → response returned with steps_completed=['rag']. Research query correctly routed and blocked (egress off). Risk query ran through RAG pipeline.
+
+Stage Summary:
+- Phase 7 COMPLETE. 303/303 tests pass (272 Phase 1-6 + 31 Phase 7). Ruff clean. Mypy clean (79 files).
+- LangGraph-based supervisor architecture: supervisor classifies intent → routes to sub-agents → agents execute in sequence → results combined.
+- 7 sub-agents all functional: RAG (9-stage pipeline), DocIntel (parsed document analysis), Vision (image/diagram description), Research (egress-gated, blocked by default), EvidenceVerify (claim verification summary), Risk (keyword-based finding extraction with severity), Deliverable (report generation combining all outputs).
+- Typed AgentState shared across all agents — LangGraph compatible.
+- Errors are non-fatal: agent failures are caught, logged, and added to state["errors"] — the graph continues and reports which steps failed.
+- API: POST /agents/query returns full agent response with all outputs.
+- Ready for Phase 8 (Vision workflows: diagram extraction, image-grounded claims, engineering drawing analysis) upon user approval.
+
+Artifacts produced:
+- 5 new Python source files: agents/__init__.py, agents/state.py, agents/supervisor.py, agents/sub_agents.py, orchestration/__init__.py, api/routes/agents.py
+- 2 new test files: tests/unit/test_agents.py (25 tests), tests/integration/test_agents_api.py (6 tests)
+- Updated: api/app.py (agents router), pyproject.toml (langgraph dep, mypy overrides, per-file-ignores)
