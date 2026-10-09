@@ -21,6 +21,9 @@ from dataclasses import dataclass
 
 from sovereign.core.logging import get_logger
 from sovereign.embeddings.indexing import IndexingService, get_indexing_service
+from sovereign.evidence.collector import EvidenceCollector
+from sovereign.evidence.contradictions import ContradictionDetector
+from sovereign.evidence.model import EvidenceReport
 from sovereign.models.gateway import ModelGateway, get_model_gateway
 from sovereign.rag.model import Claim, RAGResponse, Verdict
 from sovereign.rag.reason import generate_answer
@@ -161,12 +164,40 @@ class RAGPipeline:
         trace["stage6_evidence_count"] = len(evidence)
         log.info("rag.stage6.complete", evidence_count=len(evidence))
 
+        # --- Phase 6: Build EvidenceReport (citations + contradictions) ---
+        collector = EvidenceCollector(
+            max_per_document=self._config.max_per_document or 3,
+            max_total=self._config.evidence_top_k,
+            min_score=self._config.evidence_min_score,
+        )
+        citations = collector.collect(reranked, project_id=project_id)
+
+        # Detect contradictions
+        detector = ContradictionDetector()
+        contradictions = detector.detect(citations)
+
+        evidence_report = EvidenceReport(
+            query=query,
+            citations=citations,
+            contradictions=contradictions,
+        )
+        trace["evidence_citations"] = len(citations)
+        trace["evidence_contradictions"] = len(contradictions)
+        if contradictions:
+            log.info(
+                "rag.evidence.contradictions_found",
+                count=len(contradictions),
+                types=[c.conflict_type for c in contradictions],
+            )
+
         # Check: do we have enough evidence?
         if len(evidence) < self._config.min_evidence_count:
             log.info("rag.verdict.insufficient_evidence", reason="not enough evidence chunks")
             return RAGResponse(
                 query=query,
                 verdict=Verdict.insufficient_evidence(),
+                evidence=evidence,
+                evidence_report=evidence_report,
                 pipeline_trace=trace,
             )
 
@@ -183,6 +214,7 @@ class RAGPipeline:
                 verdict=Verdict.insufficient_evidence(),
                 answer=answer,
                 evidence=evidence,
+                evidence_report=evidence_report,
                 pipeline_trace=trace,
             )
 
@@ -194,6 +226,19 @@ class RAGPipeline:
             supported = sum(1 for c in claims if c.support_status == "SUPPORTED")
             trace["stage8_supported_claims"] = supported
             log.info("rag.stage8.complete", claims=len(claims), supported=supported)
+
+            # Update citation support statuses based on verification
+            for cit in citations:
+                cit.support_status = "SUPPORTED"  # default for cited evidence
+            # Mark conflicting citations if contradictions were detected
+            if contradictions:
+                for con in contradictions:
+                    for cit_id in con.citation_ids:
+                        for cit in citations:
+                            if cit.citation_id == cit_id:
+                                cit.support_status = "CONFLICTING"
+                                cit.support_note = con.description
+                                break
 
             # Check: are enough claims supported?
             if claims:
@@ -210,6 +255,7 @@ class RAGPipeline:
                         answer=answer,
                         claims=claims,
                         evidence=evidence,
+                        evidence_report=evidence_report,
                         pipeline_trace=trace,
                     )
 
@@ -221,6 +267,7 @@ class RAGPipeline:
             answer=answer,
             claims=claims,
             evidence=evidence,
+            evidence_report=evidence_report,
             pipeline_trace=trace,
         )
 

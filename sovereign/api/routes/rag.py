@@ -1,13 +1,16 @@
 """RAG API routes.
 
-- POST /rag/query  — ask a grounded question, get an answer with citations
+- POST /rag/query          — ask a grounded question, get an answer with citations
+- POST /rag/query/markdown — same as /query but returns citations as rendered markdown
 """
 
 from __future__ import annotations
 
 from fastapi import APIRouter
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel, Field
 
+from sovereign.evidence.renderer import CitationRenderer
 from sovereign.rag.model import RAGResponse
 from sovereign.rag.pipeline import get_rag_pipeline
 
@@ -35,6 +38,35 @@ class EvidenceResponse(BaseModel):
     text: str
 
 
+class CitationResponse(BaseModel):
+    citation_id: str
+    document_id: str
+    document_filename: str
+    chunk_id: str
+    page: int | None
+    section_path: list[str]
+    source_label: str
+    evidence_text: str
+    support_status: str
+    support_note: str
+    relevance_score: float
+
+
+class ContradictionResponse(BaseModel):
+    conflict_type: str
+    description: str
+    citation_ids: list[str]
+    conflicting_texts: list[str]
+
+
+class EvidenceReportResponse(BaseModel):
+    query: str
+    summary: dict[str, int]
+    citations: list[CitationResponse]
+    contradictions: list[ContradictionResponse]
+    has_contradictions: bool
+
+
 class RAGQueryResponse(BaseModel):
     query: str
     verdict: str
@@ -42,7 +74,34 @@ class RAGQueryResponse(BaseModel):
     answer: str
     claims: list[ClaimResponse]
     evidence: list[EvidenceResponse]
+    evidence_report: EvidenceReportResponse | None = None
     is_answered: bool
+    has_contradictions: bool
+
+
+def _build_evidence_report(response: RAGResponse) -> EvidenceReportResponse | None:
+    """Extract the EvidenceReport from a RAGResponse, if present."""
+    if response.evidence_report is None:
+        return None
+
+    from typing import Any, cast
+
+    from sovereign.evidence.model import EvidenceReport
+
+    report: EvidenceReport = response.evidence_report  # type: ignore[assignment]
+    renderer = CitationRenderer()
+    structured: dict[str, Any] = renderer.render_structured(report)
+
+    citations_raw: list[dict[str, Any]] = structured.get("citations", [])
+    contradictions_raw: list[dict[str, Any]] = structured.get("contradictions", [])
+
+    return EvidenceReportResponse(
+        query=str(structured.get("query", "")),
+        summary=cast(dict[str, int], structured.get("summary", {})),
+        citations=[CitationResponse(**c) for c in citations_raw],
+        contradictions=[ContradictionResponse(**c) for c in contradictions_raw],
+        has_contradictions=bool(contradictions_raw),
+    )
 
 
 @router.post("/query", response_model=RAGQueryResponse)
@@ -85,5 +144,48 @@ async def rag_query(req: RAGQueryRequest) -> RAGQueryResponse:
             )
             for e in response.evidence
         ],
+        evidence_report=_build_evidence_report(response),
         is_answered=response.is_answered,
+        has_contradictions=response.has_contradictions,
+    )
+
+
+@router.post("/query/markdown")
+async def rag_query_markdown(req: RAGQueryRequest) -> PlainTextResponse:
+    """Same as /query but returns the evidence report as rendered markdown.
+
+    Useful for workbench UI rendering and deliverable generation.
+    """
+    pipeline = get_rag_pipeline()
+    document_filter = {"document_id": req.document_id} if req.document_id else None
+
+    response: RAGResponse = await pipeline.query(
+        project_id=_DEV_PROJECT_ID,
+        query=req.query,
+        document_filter=document_filter,
+    )
+
+    parts: list[str] = []
+
+    # Answer
+    if response.answer:
+        parts.append(f"## Answer\n\n{response.answer}\n")
+    else:
+        parts.append(f"## {response.verdict.message}\n")
+
+    # Claims
+    if response.claims:
+        parts.append("## Claims\n")
+        for c in response.claims:
+            parts.append(f"- [{c.support_status}] {c.text}")
+        parts.append("")
+
+    # Evidence report
+    if response.evidence_report is not None:
+        renderer = CitationRenderer()
+        parts.append(renderer.render_markdown(response.evidence_report))  # type: ignore[arg-type]
+
+    return PlainTextResponse(
+        content="\n".join(parts),
+        media_type="text/markdown",
     )

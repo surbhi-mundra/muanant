@@ -145,12 +145,24 @@ class RAGResponse(BaseModel):
     # All evidence chunks used (for transparency / "show sources")
     evidence: list[EvidenceRef] = Field(default_factory=list)
 
+    # Full evidence report with citations + contradictions (Phase 6)
+    # Typed as object to avoid circular import; it's an EvidenceReport.
+    evidence_report: object | None = None
+
     # Pipeline metadata for debugging + audit
     pipeline_trace: dict[str, object] = Field(default_factory=dict)
 
     @property
     def is_answered(self) -> bool:
         return self.verdict.kind == "answered"
+
+    @property
+    def has_contradictions(self) -> bool:
+        """True if the evidence report contains detected contradictions."""
+        if self.evidence_report is None:
+            return False
+        # EvidenceReport has_contradictions property
+        return getattr(self.evidence_report, "has_contradictions", False)
 
     @property
     def has_sufficient_evidence(self) -> bool:

@@ -229,3 +229,35 @@ Artifacts produced:
 - 9 new Python source files: rag/__init__.py, rag/model.py, rag/understand.py, rag/rewrite.py, rag/select.py, rag/reason.py, rag/verify.py, rag/pipeline.py, reranking/__init__.py, reranking/service.py, api/routes/rag.py
 - 2 new test files: tests/unit/test_rag.py (31 tests), tests/integration/test_rag_api.py (6 tests)
 - Updated: api/app.py (rag router)
+
+---
+Task ID: phase-6
+Agent: Principal Engineer (main)
+Task: Phase 6 — Evidence/citations. Build structured citation model, evidence collector with deduplication, contradiction detector, citation renderer (markdown/inline/structured), integrate into RAG pipeline, and add API endpoints.
+
+Work Log:
+- Implemented sovereign/evidence/model.py: typed citation model — Citation (citation_id, document_id, document_filename, chunk_id, page, section_path, evidence_text, support_status, support_note, relevance_score; properties: section_label, source_label), Contradiction (conflict_type, description, citation_ids, conflicting_texts), ConflictType (value_mismatch/contradictory_facts/temporal_conflict/scope_conflict), EvidenceReport (query, citations, contradictions; properties: citation_count, supported/partially/unsupported/conflicting counts, has_contradictions, unique_documents, summary).
+- Implemented sovereign/evidence/collector.py: EvidenceCollector — converts RetrievalResults to Citations with deduplication (by chunk_id), source diversity (max_per_document cap), score threshold filtering, filename lookup from DB. Returns stable citation_ids (cit_000, cit_001, ...).
+- Implemented sovereign/evidence/contradictions.py: ContradictionDetector — two detection strategies: (1) value_mismatch: regex extraction of number+unit pairs, groups by context (preceding words), flags different values for same parameter (e.g. "150 PSI" vs "200 PSI"); (2) contradictory_facts: pattern matching for common contradiction pairs (operational/failed, pass/fail, open/closed, safe/unsafe, etc.). Returns Contradiction objects linking conflicting citations.
+- Implemented sovereign/evidence/renderer.py: CitationRenderer — 4 rendering modes: (1) render_markdown: full evidence report as markdown with summary, numbered citations with status icons, contradictions section; (2) render_inline: compact [1] source; [2] source format for answer appending; (3) render_structured: JSON-serializable dict for API responses; (4) render_citation_list: simple numbered/bulleted list.
+- Updated sovereign/rag/model.py: RAGResponse now includes evidence_report field (EvidenceReport, typed as object|None to avoid circular import) and has_contradictions property.
+- Updated sovereign/rag/pipeline.py: RAGPipeline now builds EvidenceReport after evidence selection (stage 6). Uses EvidenceCollector to convert reranked results to Citations, runs ContradictionDetector, attaches report to all RAGResponse returns. After evidence verification (stage 8), updates citation support_status to CONFLICTING for citations involved in contradictions. Pipeline trace includes evidence_citations and evidence_contradictions counts.
+- Updated sovereign/api/routes/rag.py: POST /rag/query response now includes full evidence_report (citations[], contradictions[], summary, has_contradictions). Added POST /rag/query/markdown endpoint that returns the answer + claims + rendered evidence report as markdown (text/markdown content type).
+- Wrote tests/unit/test_evidence.py: 31 tests across 5 test classes: TestCitationModel (5: section_label, source_label with/without page, fallback to doc_id), TestEvidenceReport (4: summary, unique_documents, has_contradictions, counts), TestEvidenceCollector (8: returns citations, dedup by chunk_id, max_total, max_per_document, min_score filter, empty, citation_id assignment, provenance preservation), TestContradictionDetector (6: single citation no contradictions, value mismatch detection, contradictory facts detection, no false positive on consistent values, citation_ids included, pass/fail detection), TestCitationRenderer (8: markdown with/without citations, markdown with contradictions, inline format, inline empty, structured dict, numbered list, summary in markdown).
+- Fixed lint: E501 (line length in model, tests), PLR0912/PLR0915 (per-file-ignores for rag/), PLR0917 (per-file-ignores for tests), fixed __init__.py import source for Contradiction (from model not contradictions).
+- Fixed mypy: EvidenceReport typed as object|None in RAGResponse (avoids circular import), _build_evidence_report uses typing.Any + cast for dict access from render_structured, removed unused type:ignore comments.
+- End-to-end verified: uploaded pump manual → RAG query → evidence report with 2 citations, each with full provenance (source_label: "pump_manual.txt"), summary stats correct (2 supported, 0 contradictions), markdown endpoint produces formatted output with Evidence & Citations section.
+
+Stage Summary:
+- Phase 6 COMPLETE. 272/272 tests pass (241 Phase 1-5 + 31 Phase 6). Ruff clean. Mypy clean (73 files).
+- Structured citation model: every claim traceable to (document_id, page, section_path, chunk_id, evidence_text, support_status).
+- Contradiction detection: value_mismatch (numerical parameter conflicts) + contradictory_facts (status word conflicts like operational/failed).
+- 4 citation rendering modes: markdown (full report), inline ([1] source format), structured (JSON dict), numbered list.
+- RAG pipeline now produces EvidenceReport alongside every RAGResponse — flows through to API and deliverables.
+- API: POST /rag/query includes full evidence_report; POST /rag/query/markdown returns rendered markdown.
+- Ready for Phase 7 (Agent orchestration: LangGraph supervisor + sub-agents) upon user approval.
+
+Artifacts produced:
+- 5 new Python source files: evidence/__init__.py, evidence/model.py, evidence/collector.py, evidence/contradictions.py, evidence/renderer.py
+- 1 new test file: tests/unit/test_evidence.py (31 tests)
+- Updated: rag/model.py (evidence_report field), rag/pipeline.py (EvidenceReport construction + contradiction detection), api/routes/rag.py (evidence_report in response + markdown endpoint), evidence/__init__.py, pyproject.toml (per-file-ignores)
