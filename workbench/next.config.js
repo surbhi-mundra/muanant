@@ -1,12 +1,9 @@
-import { dirname } from "node:path";
-import { fileURLToPath } from "node:url";
-
-const projectRoot = dirname(fileURLToPath(import.meta.url));
-
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // Keep Turbopack anchored to the directory that owns this app's package.json.
+  // This avoids resolving Next from the repository's parent workspace in preview.
   turbopack: {
-    root: projectRoot,
+    root: process.cwd(),
   },
   allowedDevOrigins: ["127.0.0.1", "localhost"],
   async rewrites() {
