@@ -2,16 +2,27 @@
 
 const API_BASE = "/api";
 
-async function fetchJson(url: string, options?: RequestInit): Promise<any> {
-  const resp = await fetch(url, options);
-  const text = await resp.text();
-  if (!resp.ok) {
-    throw new Error(`API error ${resp.status}: ${text.substring(0, 200)}`);
-  }
+async function fetchJson(url: string, options?: RequestInit, timeoutMs?: number): Promise<any> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs || 300000); // 5 min default
   try {
-    return JSON.parse(text);
-  } catch {
-    throw new Error(`Invalid JSON response: ${text.substring(0, 200)}`);
+    const resp = await fetch(url, { ...options, signal: controller.signal });
+    const text = await resp.text();
+    if (!resp.ok) {
+      throw new Error(`API error ${resp.status}: ${text.substring(0, 200)}`);
+    }
+    try {
+      return JSON.parse(text);
+    } catch {
+      throw new Error(`Invalid JSON response: ${text.substring(0, 200)}`);
+    }
+  } catch (e: any) {
+    if (e?.name === "AbortError") {
+      throw new Error("Request timed out — the AI model is taking too long. Try again or use a smaller document.");
+    }
+    throw e;
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
@@ -46,7 +57,7 @@ export async function ragQuery(req: { query: string; document_id?: string }): Pr
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(req),
-  });
+  }, 600000); // 10 min timeout for RAG (multiple LLM calls)
 }
 
 export async function agentQuery(req: { query: string; document_id?: string }): Promise<any> {
@@ -54,7 +65,7 @@ export async function agentQuery(req: { query: string; document_id?: string }): 
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(req),
-  });
+  }, 600000); // 10 min timeout for agents
 }
 
 export async function createDeliverable(req: any): Promise<any> {

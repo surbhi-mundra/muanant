@@ -1,11 +1,17 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // Keep Turbopack anchored to the directory that owns this app's package.json.
-  // This avoids resolving Next from the repository's parent workspace in preview.
   turbopack: {
     root: process.cwd(),
   },
   allowedDevOrigins: ["127.0.0.1", "localhost"],
+  // Allow large file uploads (PDFs can be big)
+  middlewareClientMaxBodySize: "100mb",
+  // Increase proxy timeout for long-running RAG queries (Ollama is slow)
+  httpAgentOptions: {
+    keepAlive: true,
+    timeout: 300000, // 5 minutes
+  },
   async rewrites() {
     return [
       {
