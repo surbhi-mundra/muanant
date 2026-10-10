@@ -293,43 +293,52 @@ async def ingest_document(
     # 5. Persist Document (MongoDB)
     version = _get_next_version(project_id, filename)
     doc_status = "parsed" if parsed else "stored"
-    doc_dict = new_document(
-        id=doc_id,
-        project_id=project_id,
-        original_filename=filename,
-        storage_key=storage_key,
-        mime_type=validation.mime_type,
-        size_bytes=validation.size_bytes,
-        sha256=validation.sha256,
-        status=doc_status,
-        version=version,
-        metadata_json=json.dumps({
-            "parse_warnings": parse_warnings,
-            "parsed_at": utcnow().isoformat(),
-            "word_count": parsed.metadata.word_count if parsed else 0,
-            "page_count": parsed.metadata.page_count if parsed else 0,
-        }),
-    )
+    try:
+        doc_dict = new_document(
+            id=doc_id,
+            project_id=project_id,
+            original_filename=filename,
+            storage_key=storage_key,
+            mime_type=validation.mime_type,
+            size_bytes=validation.size_bytes,
+            sha256=validation.sha256,
+            status=doc_status,
+            version=version,
+            metadata_json=json.dumps({
+                "parse_warnings": parse_warnings,
+                "parsed_at": utcnow().isoformat(),
+                "word_count": parsed.metadata.word_count if parsed else 0,
+                "page_count": parsed.metadata.page_count if parsed else 0,
+            }),
+        )
 
-    with session_scope() as db:
-        db[COLLECTIONS["documents"]].insert_one(doc_dict)
-        write_event(
-            db,
-            AuditEventPayload(
-                project_id=project_id,
-                category="ingestion",
-                action="document.ingest",
-                outcome="success",
-                details={
-                    "document_id": doc_id,
-                    "filename": filename,
-                    "mime_type": validation.mime_type,
-                    "size_bytes": validation.size_bytes,
-                    "version": version,
-                    "status": doc_status,
-                    "parse_warnings": parse_warnings[:5],
-                },
-            ),
+        with session_scope() as db:
+            db[COLLECTIONS["documents"]].insert_one(doc_dict)
+            write_event(
+                db,
+                AuditEventPayload(
+                    project_id=project_id,
+                    category="ingestion",
+                    action="document.ingest",
+                    outcome="success",
+                    details={
+                        "document_id": doc_id,
+                        "filename": filename,
+                        "mime_type": validation.mime_type,
+                        "size_bytes": validation.size_bytes,
+                        "version": version,
+                        "status": doc_status,
+                        "parse_warnings": parse_warnings[:5],
+                    },
+                ),
+            )
+    except Exception as e:
+        log.error("ingestion.persist.failed", document_id=doc_id, error=str(e), exc_info=True)
+        return IngestResult(
+            document_id=doc_id, project_id=project_id, status="stored",
+            mime_type=validation.mime_type, sha256=validation.sha256,
+            size_bytes=validation.size_bytes, version=version,
+            parse_warnings=parse_warnings + [f"persist failed: {e}"],
         )
 
     # 6. Store parsed document JSON (if parse succeeded)

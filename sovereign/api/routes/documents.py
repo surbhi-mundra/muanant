@@ -60,29 +60,35 @@ async def upload_document(
     Accepts multipart/form-data with a single file field.
     Validates, stores, parses, and indexes the document.
     """
-    project_id = _DEV_PROJECT_ID
-    data = await file.read()
-    result = await ingest_document(
-        project_id=project_id,
-        filename=file.filename or "upload",
-        data=data,
-        client_mime=file.content_type or "",
-    )
-    return JSONResponse(
-        status_code=201 if result.status in ("parsed", "stored", "indexed") else 200,
-        content=IngestResponse(
-            document_id=result.document_id,
-            project_id=result.project_id,
-            status=result.status,
-            mime_type=result.mime_type,
-            sha256=result.sha256,
-            size_bytes=result.size_bytes,
-            version=result.version,
-            is_duplicate=result.is_duplicate,
-            parse_warnings=result.parse_warnings,
-            quarantine_reason=result.quarantine_reason,
-        ).model_dump(),
-    )
+    try:
+        project_id = _DEV_PROJECT_ID
+        data = await file.read()
+        result = await ingest_document(
+            project_id=project_id,
+            filename=file.filename or "upload",
+            data=data,
+            client_mime=file.content_type or "",
+        )
+        return JSONResponse(
+            status_code=201 if result.status in ("parsed", "stored", "indexed") else 200,
+            content=IngestResponse(
+                document_id=result.document_id,
+                project_id=result.project_id,
+                status=result.status,
+                mime_type=result.mime_type,
+                sha256=result.sha256,
+                size_bytes=result.size_bytes,
+                version=result.version,
+                is_duplicate=result.is_duplicate,
+                parse_warnings=result.parse_warnings,
+                quarantine_reason=result.quarantine_reason,
+            ).model_dump(),
+        )
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error("upload_failed", error=str(e), exc_info=True)
+        from sovereign.core.errors import SovereignError
+        raise SovereignError(f"Upload failed: {e}") from e
 
 
 @router.get("", response_model=DocumentListResponse)
