@@ -53,17 +53,23 @@ const SUGGESTED = [
 ];
 
 function verdictBadge(status?: string) {
-  switch (status) {
+  const s = (status || "").toLowerCase();
+  switch (s) {
+    case "answered":
     case "supported":
-      return { cls: "badge-supported", label: "SUPPORTED" };
-    case "partial":
-      return { cls: "badge-partial", label: "PARTIAL" };
+      return { cls: "badge-supported", label: "ANSWERED" };
+    case "insufficient_evidence":
     case "unsupported":
-      return { cls: "badge-unsupported", label: "UNSUPPORTED" };
+      return { cls: "badge-unsupported", label: "INSUFFICIENT EVIDENCE" };
+    case "partial":
+    case "partially_supported":
+      return { cls: "badge-partial", label: "PARTIALLY SUPPORTED" };
     case "conflicting":
       return { cls: "badge-conflicting", label: "CONFLICTING" };
+    case "out_of_scope":
+      return { cls: "badge-unsupported", label: "OUT OF SCOPE" };
     default:
-      return { cls: "badge-info", label: "INFO" };
+      return { cls: "badge-info", label: s ? s.toUpperCase() : "INFO" };
   }
 }
 
@@ -324,13 +330,11 @@ function AssistantMessage({ message }: { message: Message }) {
   }
 
   const answer = message.answer || {};
-  const verdict = answer.verdict_status
-    ? verdictBadge(answer.verdict_status)
-    : verdictBadge(answer.verdict);
-  const answerText = answer.answer || answer.text || "";
+  const verdict = verdictBadge(answer.verdict);
+  const answerText = answer.answer || "";
   const claims = answer.claims || [];
-  const evidence = answer.evidence || answer.sources || [];
-  const confidence = answer.confidence;
+  const evidence = answer.evidence || [];
+  const isAnswered = answer.is_answered;
 
   return (
     <div className="flex gap-3 sov-fade-in">
@@ -345,28 +349,6 @@ function AssistantMessage({ message }: { message: Message }) {
               </span>
               <span className={`sov-badge ${verdict.cls}`}>{verdict.label}</span>
             </div>
-            {confidence != null && (
-              <div className="flex items-center gap-2">
-                <span className="text-[11px] text-zinc-500">Confidence</span>
-                <div className="w-20 h-1.5 rounded-full overflow-hidden" style={{ background: "var(--color-surface-2)" }}>
-                  <div
-                    className="h-full rounded-full"
-                    style={{
-                      width: `${Math.round(confidence * 100)}%`,
-                      background:
-                        confidence >= 0.7
-                          ? "var(--color-success)"
-                          : confidence >= 0.4
-                          ? "var(--color-warning)"
-                          : "var(--color-danger)",
-                    }}
-                  />
-                </div>
-                <span className="text-[12px] font-mono font-semibold text-zinc-300 tabular-nums">
-                  {Math.round(confidence * 100)}%
-                </span>
-              </div>
-            )}
           </div>
           <p className="text-[14px] leading-relaxed text-zinc-100">{answerText}</p>
         </div>

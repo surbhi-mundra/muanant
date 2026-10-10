@@ -114,12 +114,11 @@ export default function DeliverablesPage() {
     setTitle("");
     try {
       const resp: CreateResp = await createDeliverable({
-        type,
+        deliverable_type: type,
         query,
       });
-      const content =
-        resp.content || resp.markdown || resp.preview || "";
-      setMarkdown(content);
+      const md = resp.markdown || resp.content || resp.preview || "";
+      setMarkdown(md);
       setTitle(resp.title || TYPES.find((t) => t.id === type)?.label || "Deliverable");
     } catch (e: any) {
       setError(e?.message || "Failed to generate deliverable");
@@ -129,10 +128,13 @@ export default function DeliverablesPage() {
   };
 
   const doExport = async (format: string) => {
-    if (!markdown) return;
+    if (!query) return;
     setExporting(format);
     try {
-      const blob = await exportDeliverable({ type, query, content: markdown, title }, format);
+      const blob = await exportDeliverable(
+        { deliverable_type: type, query },
+        format,
+      );
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;

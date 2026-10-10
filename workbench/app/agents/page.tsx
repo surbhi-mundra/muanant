@@ -99,14 +99,12 @@ export default function AgentsPage() {
     }
   };
 
-  const steps = response?.steps || response?.pipeline || [];
+  const steps = response?.steps_completed || response?.steps || [];
   const findings = response?.findings || [];
   const deliverableContent =
-    response?.deliverable?.content ||
     response?.deliverable?.markdown ||
+    response?.deliverable?.content ||
     response?.deliverable?.preview ||
-    response?.deliverable_preview ||
-    response?.deliverable_markdown ||
     "";
   const taskBadge = taskTypeBadge(response?.task_type);
 

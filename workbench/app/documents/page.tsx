@@ -9,12 +9,15 @@ import {
 
 type Doc = {
   id: string;
-  filename: string;
+  original_filename?: string;
+  filename?: string;
+  mime_type?: string;
   content_type?: string;
+  size_bytes?: number;
   size?: number;
   created_at?: string;
   status?: string;
-  chunks?: number;
+  version?: number;
 };
 
 type DocsResp = {
@@ -152,7 +155,7 @@ export default function DocumentsPage() {
     []
   );
 
-  const totalSize = docs.reduce((sum, d) => sum + (d.size || 0), 0);
+  const totalSize = docs.reduce((sum, d) => sum + (d.size_bytes || d.size || 0), 0);
 
   return (
     <div className="sov-fade-in">
@@ -353,7 +356,7 @@ export default function DocumentsPage() {
                           </div>
                           <div className="min-w-0">
                             <div className="text-[13px] font-medium text-zinc-100 truncate max-w-[420px]">
-                              {d.filename}
+                              {d.original_filename || d.filename || "Unknown"}
                             </div>
                             <div className="text-[11px] text-zinc-500 truncate font-mono">
                               {d.id.slice(0, 12)}…
@@ -365,7 +368,7 @@ export default function DocumentsPage() {
                         {d.content_type?.split("/")[1] || "file"}
                       </td>
                       <td className="px-3 py-3 text-[12px] text-zinc-400">
-                        {fmtSize(d.size)}
+                        {fmtSize(d.size_bytes || d.size || 0)}
                       </td>
                       <td className="px-3 py-3">
                         <span className="sov-badge sov-badge-dot badge-supported">
