@@ -35,6 +35,7 @@ dependencies = [
     "reportlab>=4.0",
     "chardet>=5.0",
     "PyMuPDF>=1.24",
+    "mongomock>=4.1",
 ]
 
 [project.optional-dependencies]

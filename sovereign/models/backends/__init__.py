@@ -119,3 +119,27 @@ try:
     register_backend("tesseract.ocr", _tesseract_ocr)
 except ImportError:
     pass
+
+# Ollama backends (local LLM + embeddings via Ollama — works on Mac/Linux/Windows)
+# Ollama only needs httpx (already a core dep), so we register eagerly.
+try:
+    from sovereign.models.backends.ollama import OllamaTextLLM
+    from sovereign.models.backends.ollama_embedding import OllamaEmbeddingModel
+
+    def _ollama_text(cfg: dict[str, Any]) -> OllamaTextLLM:
+        return OllamaTextLLM(
+            model_name=cfg.get("model_name", "qwen2.5:7b-instruct"),
+            server_url=cfg.get("server_url", "http://127.0.0.1:11434"),
+        )
+
+    def _ollama_embedding(cfg: dict[str, Any]) -> OllamaEmbeddingModel:
+        return OllamaEmbeddingModel(
+            model_name=cfg.get("model_name", "nomic-embed-text"),
+            server_url=cfg.get("server_url", "http://127.0.0.1:11434"),
+            dim=cfg.get("dim", 768),
+        )
+
+    register_backend("ollama.text", _ollama_text)
+    register_backend("ollama.embedding", _ollama_embedding)
+except ImportError:
+    pass

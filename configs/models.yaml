@@ -1,56 +1,29 @@
-# SOVEREIGN Model Gateway configuration — dev sandbox profile.
+# SOVEREIGN Model Gateway configuration — dev sandbox (mock backends).
 #
-# This file is the SOLE place where model backends are wired. Agents and
-# capabilities never reference a specific model name; they ask the
-# ModelGateway for a capability (text / vision / embedding / reranker / ocr)
-# and receive whatever adapter is configured here.
+# This is the default config for development and testing. All backends
+# are mock — they return deterministic placeholder responses and require
+# no GPU, no model downloads, and no external services.
 #
-# To switch from the mock backend (CPU-only dev) to a real backend on a GPU
-# tier, change the `backend:` key. No application code changes.
+# To switch to real local models via Ollama, copy models.ollama.yaml
+# over this file (or set MODEL_GATEWAY_CONFIG=configs/models.ollama.yaml).
 
 text:
   backend: mock.text
   model_name: mock-text-llm
-  # Real Tier-2+ example:
-  # backend: vllm.text
-  # model_name: Qwen/Qwen2.5-7B-Instruct
-  # server_url: http://127.0.0.1:8001
-  # max_model_len: 32768
-  # tensor_parallel_size: 1
-  # quantization: awq
 
 vision:
   backend: mock.vision
   model_name: mock-vision-llm
-  # Real Tier-2+ example:
-  # backend: vllm.vision
-  # model_name: Qwen/Qwen2-VL-7B-Instruct
-  # server_url: http://127.0.0.1:8002
 
 embedding:
   backend: mock.embedding
   model_name: mock-embeddings
-  dim: 384  # matches sentence-transformers/all-MiniLM-L6-v2
-  # Real Tier-2+ example:
-  # backend: sentence_transformers.embedding
-  # model_name: BAAI/bge-m3
-  # dim: 1024
-  # batch_size: 32
+  dim: 384
 
 reranker:
   backend: mock.reranker
   model_name: mock-reranker
-  # Real Tier-2+ example:
-  # backend: cross_encoder.reranker
-  # model_name: BAAI/bge-reranker-v2-m3
 
 ocr:
   backend: mock.ocr
   model_name: mock-ocr
-  # Real Tier-2+ example (Tesseract is CPU-friendly, Tier 1-2 OK):
-  # backend: tesseract.ocr
-  # model_name: tesseract-5.x
-  # languages: [eng]
-  # Or for layout-aware OCR:
-  # backend: surya.ocr
-  # model_name: surya/ocr
