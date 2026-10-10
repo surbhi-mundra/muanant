@@ -1,10 +1,11 @@
 "use client";
 
-const API_BASE = "/api";
+// Call the backend directly — no Next.js proxy (avoids proxy timeout issues)
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || "http://127.0.0.1:8000";
 
 async function fetchJson(url: string, options?: RequestInit, timeoutMs?: number): Promise<any> {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs || 300000); // 5 min default
+  const timeout = setTimeout(() => controller.abort(), timeoutMs || 300000);
   try {
     const resp = await fetch(url, { ...options, signal: controller.signal });
     const text = await resp.text();
@@ -29,7 +30,7 @@ async function fetchJson(url: string, options?: RequestInit, timeoutMs?: number)
 export async function uploadDocument(file: File): Promise<any> {
   const formData = new FormData();
   formData.append("file", file);
-  return fetchJson(`${API_BASE}/documents`, { method: "POST", body: formData });
+  return fetchJson(`${API_BASE}/documents`, { method: "POST", body: formData }, 120000);
 }
 
 export async function listDocuments(): Promise<any> {
@@ -57,7 +58,7 @@ export async function ragQuery(req: { query: string; document_id?: string }): Pr
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(req),
-  }, 600000); // 10 min timeout for RAG (multiple LLM calls)
+  }, 600000);
 }
 
 export async function agentQuery(req: { query: string; document_id?: string }): Promise<any> {
@@ -65,7 +66,7 @@ export async function agentQuery(req: { query: string; document_id?: string }): 
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(req),
-  }, 600000); // 10 min timeout for agents
+  }, 600000);
 }
 
 export async function createDeliverable(req: any): Promise<any> {
