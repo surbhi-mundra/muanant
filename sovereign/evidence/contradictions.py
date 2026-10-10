@@ -131,13 +131,15 @@ class ContradictionDetector:
         contradictions: list[Contradiction] = []
 
         # Define contradiction pairs (word1, word2)
+        # Only use word-boundary matching to avoid false positives
+        # (e.g. "pass" in "passenger" or "fail" in "failure")
+        import re  # noqa: PLC0415
+
         pairs = [
             ("operational", "failed"),
             ("operational", "broken"),
             ("operational", "down"),
-            ("pass", "fail"),
             ("open", "closed"),
-            ("yes", "no"),
             ("safe", "unsafe"),
             ("normal", "abnormal"),
             ("working", "broken"),
@@ -145,12 +147,20 @@ class ContradictionDetector:
         ]
 
         for word1, word2 in pairs:
-            cits1 = [c for c in citations if word1 in c.evidence_text.lower()]
-            cits2 = [c for c in citations if word2 in c.evidence_text.lower()]
+            # Use word-boundary regex to avoid matching substrings
+            pat1 = re.compile(rf"\b{word1}\b", re.IGNORECASE)
+            pat2 = re.compile(rf"\b{word2}\b", re.IGNORECASE)
 
-            if cits1 and cits2:
-                # Found both sides of a contradiction
-                all_cits = cits1 + cits2
+            cits1 = [c for c in citations if pat1.search(c.evidence_text)]
+            cits2 = [c for c in citations if pat2.search(c.evidence_text)]
+
+            # Only flag if BOTH words appear in DIFFERENT citations
+            # (same citation mentioning both is not a contradiction)
+            cits1_only = [c for c in cits1 if c not in cits2]
+            cits2_only = [c for c in cits2 if c not in cits1]
+
+            if cits1_only and cits2_only:
+                all_cits = cits1_only + cits2_only
                 contradictions.append(
                     Contradiction(
                         conflict_type="contradictory_facts",
@@ -160,7 +170,7 @@ class ContradictionDetector:
                         ),
                         citation_ids=[c.citation_id for c in all_cits],
                         conflicting_texts=[
-                            f'[{word1 if c in cits1 else word2}] '
+                            f'[{word1 if c in cits1_only else word2}] '
                             f'"{c.evidence_text[:200]}" (from {c.source_label})'
                             for c in all_cits
                         ],

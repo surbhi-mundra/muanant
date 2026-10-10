@@ -112,7 +112,7 @@ class CitationRenderer:
             ],
             "contradictions": [
                 {
-                    "type": con.conflict_type,
+                    "conflict_type": con.conflict_type,
                     "description": con.description,
                     "citation_ids": con.citation_ids,
                     "conflicting_texts": con.conflicting_texts,

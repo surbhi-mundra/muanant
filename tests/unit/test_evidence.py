@@ -309,14 +309,15 @@ class TestContradictionDetector:
         assert len(contradictions[0].citation_ids) >= 2
 
     def test_detect_pass_fail(self) -> None:
-        """Pass vs fail should be detected as contradictory."""
+        """Pass vs fail was removed (too many false positives). Verify it's not flagged."""
         detector = ContradictionDetector()
         citations = [
             _make_citation(citation_id="c1", evidence_text="Inspection result: pass."),
             _make_citation(citation_id="c2", evidence_text="Inspection result: fail."),
         ]
         contradictions = detector.detect(citations)
-        assert len(contradictions) >= 1
+        # pass/fail removed from pairs — no contradiction expected
+        assert len(contradictions) == 0
 
 
 # ---------------------------------------------------------------------------
