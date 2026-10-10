@@ -112,42 +112,56 @@ async def rag_query(req: RAGQueryRequest) -> RAGQueryResponse:
     If insufficient evidence is found, returns verdict="insufficient_evidence"
     with the message "I don't have sufficient evidence to answer this."
     """
-    pipeline = get_rag_pipeline()
-    document_filter = {"document_id": req.document_id} if req.document_id else None
+    try:
+        pipeline = get_rag_pipeline()
+        document_filter = {"document_id": req.document_id} if req.document_id else None
 
-    response: RAGResponse = await pipeline.query(
-        project_id=_DEV_PROJECT_ID,
-        query=req.query,
-        document_filter=document_filter,
-    )
+        response: RAGResponse = await pipeline.query(
+            project_id=_DEV_PROJECT_ID,
+            query=req.query,
+            document_filter=document_filter,
+        )
 
-    return RAGQueryResponse(
-        query=response.query,
-        verdict=response.verdict.kind,
-        verdict_message=response.verdict.message,
-        answer=response.answer,
-        claims=[
-            ClaimResponse(
-                text=c.text,
-                support_status=c.support_status,
-                evidence_count=len(c.evidence),
-            )
-            for c in response.claims
-        ],
-        evidence=[
-            EvidenceResponse(
-                document_id=e.document_id,
-                chunk_id=e.chunk_id,
-                page=e.page,
-                section_path=e.section_path,
-                text=e.text,
-            )
-            for e in response.evidence
-        ],
-        evidence_report=_build_evidence_report(response),
-        is_answered=response.is_answered,
-        has_contradictions=response.has_contradictions,
-    )
+        # Build evidence report safely — don't let it crash the whole response
+        evidence_report = None
+        try:
+            evidence_report = _build_evidence_report(response)
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning("evidence_report_build_failed", error=str(e))
+
+        return RAGQueryResponse(
+            query=response.query,
+            verdict=response.verdict.kind,
+            verdict_message=response.verdict.message,
+            answer=response.answer,
+            claims=[
+                ClaimResponse(
+                    text=c.text,
+                    support_status=c.support_status,
+                    evidence_count=len(c.evidence),
+                )
+                for c in response.claims
+            ],
+            evidence=[
+                EvidenceResponse(
+                    document_id=e.document_id,
+                    chunk_id=e.chunk_id,
+                    page=e.page,
+                    section_path=e.section_path,
+                    text=e.text,
+                )
+                for e in response.evidence
+            ],
+            evidence_report=evidence_report,
+            is_answered=response.is_answered,
+            has_contradictions=response.has_contradictions,
+        )
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error("rag_query_failed", error=str(e), exc_info=True)
+        from sovereign.core.errors import SovereignError
+        raise SovereignError(f"RAG query failed: {e}") from e
 
 
 @router.post("/query/markdown")
