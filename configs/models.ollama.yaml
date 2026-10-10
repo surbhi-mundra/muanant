@@ -1,46 +1,44 @@
 # SOVEREIGN Model Gateway configuration — Ollama (local inference)
 #
-# This file wires the ModelGateway to use Ollama for real local AI inference.
-# Ollama works on Mac (Apple Silicon + Intel), Linux, and Windows.
+# Optimized for M4 Mac with 24GB RAM.
+# All models run locally via Ollama — no cloud, no data leaves your machine.
 #
 # Setup:
-#   1. Install Ollama: https://ollama.com
-#   2. Start Ollama: ollama serve (or it auto-starts on Mac)
-#   3. Pull models (see below)
-#   4. Edit this file to select which models to use
-#   5. Restart the API: make run
+#   1. Install Ollama: https://ollama.com or `brew install ollama`
+#   2. Pull models:
+#        ollama pull qwen2.5:14b-instruct
+#        ollama pull nomic-embed-text
+#        ollama pull llama3.2-vision:11b
+#   3. Copy this file: cp configs/models.ollama.yaml configs/models.yaml
+#   4. Restart API: make run
 
 text:
   backend: ollama.text
-  model_name: qwen2.5:7b-instruct
+  model_name: qwen2.5:14b-instruct
   server_url: http://127.0.0.1:11434
-  # Lighter alternative (faster, less accurate):
-  # model_name: qwen2.5:3b-instruct
-  # Even lighter:
-  # model_name: qwen2.5:1.5b-instruct
+  # Lighter alternatives (if 14B is too slow):
+  # model_name: qwen2.5:7b-instruct    # ~4.7 GB, faster
+  # model_name: qwen2.5:3b-instruct    # ~2.0 GB, fastest
 
 vision:
   backend: mock.vision
   model_name: mock-vision-llm
-  # Ollama doesn't support vision models yet as of 2024.
-  # For vision, use vLLM with Qwen2-VL on a GPU machine, or
-  # use the mock backend (describes images with placeholder text).
+  # Ollama doesn't support vision yet. Use mock for now.
+  # For real vision, use vLLM + Qwen2-VL on a GPU Linux server.
+  # Or set backend to mock.vision and use the /ocr/image endpoint
+  # for text extraction from images (Tesseract OCR works).
 
 embedding:
   backend: ollama.embedding
   model_name: nomic-embed-text
   server_url: http://127.0.0.1:11434
   dim: 768
-  # Alternative embedding model:
-  # model_name: all-MiniLM-L6-v2.gguf2.f16
-  # dim: 384
 
 reranker:
   backend: mock.reranker
   model_name: mock-reranker
-  # Ollama doesn't have a dedicated reranker model.
-  # For real reranking, use sentence-transformers with
-  # BAAI/bge-reranker-v2-m3 on a GPU machine.
+  # Ollama has no reranker model. The mock reranker uses lexical
+  # overlap (Jaccard) which works reasonably well for keyword-heavy queries.
 
 ocr:
   backend: tesseract.ocr
