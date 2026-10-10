@@ -1,0 +1,82 @@
+SOVEREIGN INDUSTRIAL INSPECTION REPORT
+Report ID: IR-2024-0042
+Date: 2024-10-09
+Inspector: J. Martinez
+Facility: Northgate Processing Plant - Building A
+
+1.0 EQUIPMENT OVERVIEW
+This report covers the inspection of Pump P-101, a centrifugal pump
+manufactured by Grundfos (Model NK 80-200). The pump has been in
+continuous operation since installation on 2019-03-15. The pump is
+located in Building A, Section 3, and is part of the primary cooling
+loop. The serial number is SN-2019-0315-A.
+
+2.0 OPERATING PARAMETERS
+- Maximum operating pressure: 150 PSI
+- Normal operating pressure: 120 PSI
+- Maximum flow rate: 500 GPM
+- Operating temperature: 65°C
+- Rated speed: 1750 RPM
+- Motor power: 25 kW
+
+3.0 MAINTENANCE SCHEDULE
+The pump P-101 requires maintenance every 6 months. The last
+maintenance was performed on 2024-04-15. The next scheduled
+maintenance is due on 2024-10-15. Maintenance includes bearing
+inspection, seal replacement, and impeller cleaning.
+
+4.0 INSPECTION FINDINGS
+
+4.1 Bearing Condition
+The bearing on pump P-101 shows signs of wear. Vibration analysis
+indicates a 15% increase from baseline readings. The bearing
+temperature was measured at 78°C, which is above the recommended
+maximum of 70°C. This is a critical finding that requires immediate
+attention. Bearing replacement is recommended within 7 days.
+
+4.2 Seal Integrity
+The mechanical seal shows minor leakage. The leak rate was measured
+at 2 drops per minute, which is within acceptable limits but should
+be monitored. Seal replacement is recommended during the next
+scheduled maintenance.
+
+4.3 Impeller Condition
+The impeller shows moderate corrosion on the leading edges. This is
+consistent with the pump age (5 years). No immediate action is
+required, but the impeller should be replaced within the next 12
+months to prevent performance degradation.
+
+4.4 Discharge Pressure
+The discharge pressure was measured at 118 PSI, which is within
+the normal operating range of 120 PSI. No issues detected.
+
+5.0 RISK ASSESSMENT
+The bearing wear is classified as a CRITICAL risk. If the bearing
+fails, the pump will seize, potentially causing a catastrophic
+failure of the cooling loop. This could lead to overheating of
+downstream equipment and a potential fire hazard. Immediate action
+is required to prevent a safety incident.
+
+The seal leakage is classified as a LOW risk. The current leak rate
+is manageable, but if it increases, it could lead to environmental
+contamination.
+
+The impeller corrosion is classified as a MEDIUM risk. While not
+immediate, it will affect pump efficiency over time.
+
+6.0 RECOMMENDATIONS
+1. Schedule emergency bearing replacement within 7 days - CRITICAL
+2. Replace mechanical seal during next maintenance window - HIGH
+3. Plan impeller replacement within 12 months - MEDIUM
+4. Increase vibration monitoring to daily until bearing replaced
+5. Notify safety officer of the critical bearing condition
+6. Prepare contingency plan for cooling loop shutdown
+
+7.0 CONCLUSION
+Pump P-101 is currently operational but has a critical bearing
+condition that requires immediate attention. With prompt action,
+the risk of catastrophic failure can be mitigated. The pump should
+remain in service with enhanced monitoring until the bearing is
+replaced.
+
+End of Report.

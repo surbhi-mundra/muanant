@@ -1,29 +1,46 @@
-# SOVEREIGN Model Gateway configuration — dev sandbox (mock backends).
+# SOVEREIGN Model Gateway configuration — Ollama (local inference)
 #
-# This is the default config for development and testing. All backends
-# are mock — they return deterministic placeholder responses and require
-# no GPU, no model downloads, and no external services.
+# Optimized for M4 Mac with 24GB RAM.
+# All models run locally via Ollama — no cloud, no data leaves your machine.
 #
-# To switch to real local models via Ollama, copy models.ollama.yaml
-# over this file (or set MODEL_GATEWAY_CONFIG=configs/models.ollama.yaml).
+# Setup:
+#   1. Install Ollama: https://ollama.com or `brew install ollama`
+#   2. Pull models:
+#        ollama pull qwen2.5:14b-instruct
+#        ollama pull nomic-embed-text
+#        ollama pull llama3.2-vision:11b
+#   3. Copy this file: cp configs/models.ollama.yaml configs/models.yaml
+#   4. Restart API: make run
 
 text:
-  backend: mock.text
-  model_name: mock-text-llm
+  backend: ollama.text
+  model_name: qwen2.5:14b-instruct
+  server_url: http://127.0.0.1:11434
+  # Lighter alternatives (if 14B is too slow):
+  # model_name: qwen2.5:7b-instruct    # ~4.7 GB, faster
+  # model_name: qwen2.5:3b-instruct    # ~2.0 GB, fastest
 
 vision:
   backend: mock.vision
   model_name: mock-vision-llm
+  # Ollama doesn't support vision yet. Use mock for now.
+  # For real vision, use vLLM + Qwen2-VL on a GPU Linux server.
+  # Or set backend to mock.vision and use the /ocr/image endpoint
+  # for text extraction from images (Tesseract OCR works).
 
 embedding:
-  backend: mock.embedding
-  model_name: mock-embeddings
-  dim: 384
+  backend: ollama.embedding
+  model_name: nomic-embed-text
+  server_url: http://127.0.0.1:11434
+  dim: 768
 
 reranker:
   backend: mock.reranker
   model_name: mock-reranker
+  # Ollama has no reranker model. The mock reranker uses lexical
+  # overlap (Jaccard) which works reasonably well for keyword-heavy queries.
 
 ocr:
-  backend: mock.ocr
-  model_name: mock-ocr
+  backend: tesseract.ocr
+  model_name: tesseract-5.x
+  languages: [eng]

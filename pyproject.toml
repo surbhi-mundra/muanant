@@ -184,7 +184,7 @@ markers = [
 ]
 filterwarnings = [
     "error",
-    "ignore::DeprecationWarning:passlib.*",
+    "ignore::DeprecationWarning",
 ]
 
 # ---------------------------------------------------------------------------

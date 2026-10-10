@@ -1,0 +1,1 @@
+SOVEREIGN is an on-premise agentic AI workbench. It uses Qwen2.5 for text generation and nomic-embed-text for embeddings. The maintenance schedule for pump P-101 is every 6 months. The maximum operating pressure is 150 PSI.

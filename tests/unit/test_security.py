@@ -166,8 +166,10 @@ class TestSandbox:
 
     def test_run_failed_command(self) -> None:
         """Failed command should have non-zero exit code."""
+        import sys
+
         sandbox = Sandbox(timeout=10)
-        result = sandbox.run(["python", "-c", "import sys; sys.exit(1)"])
+        result = sandbox.run([sys.executable, "-c", "import sys; sys.exit(1)"])
         assert not result.succeeded
         assert result.exit_code == 1
 

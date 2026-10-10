@@ -1,0 +1,26 @@
+# SOVEREIGN Model Gateway configuration — dev sandbox (mock backends).
+#
+# Default mock configuration for tests and offline development. All backends
+# are mock — they return deterministic placeholder responses and require
+# no GPU, no model downloads, and no external services.
+
+text:
+  backend: mock.text
+  model_name: mock-text-llm
+
+vision:
+  backend: mock.vision
+  model_name: mock-vision-llm
+
+embedding:
+  backend: mock.embedding
+  model_name: mock-embeddings
+  dim: 384
+
+reranker:
+  backend: mock.reranker
+  model_name: mock-reranker
+
+ocr:
+  backend: mock.ocr
+  model_name: mock-ocr
